@@ -19,8 +19,5 @@
 
 # Go workspace file
 go.work
-<<<<<<< HEAD
-=======
 
 .env
->>>>>>> 7b9f398 (@tesh254/go-migraine: initial commit)
