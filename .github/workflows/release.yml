@@ -1,0 +1,47 @@
+name: Migraine Build and Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      - "v*.*.*-alpha.*"
+      - "v*.*.*-beta.*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.21.1
+
+      - name: Build for Linux
+        run: GOOS=linux GOARCH=amd64 go build -o migraine-linux
+
+      - name: Build for Darwin
+        run: GOOS=darwin GOARCH=amd64 go build -o migraine-darwin
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files:
+            - migraine-linux
+            - migraine-darwin
+          tag_name: ${{ github.ref }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: release
+          path: |
+            migraine-linux
+            migraine-darwin
