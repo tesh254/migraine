@@ -23,8 +23,8 @@ func (c *Core) getDatabaseURL(envFile string, dbVar *string) {
 
 	key := "DATABASE_URL"
 
-	if config.getConfig().DbVar != nil {
-		key = *config.getConfig().DbVar
+	if config.getConfig().DbUrl != nil {
+		key = *config.getConfig().DbUrl
 	}
 
 	if dbVar != nil {
@@ -41,6 +41,5 @@ func (c *Core) getDatabaseURL(envFile string, dbVar *string) {
 		log.Fatalf(":::env::: var `%s=` provided but it's empty\n", key)
 	}
 
-	config.updateEnvConfig(envFile, key, true)
-	c.DbUrl = dbUrl
+	config.updateEnvConfig(envFile, *dbVar, dbUrl, true)
 }

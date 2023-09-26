@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 )
 
@@ -13,12 +12,12 @@ type CLI struct{}
 func (cli *CLI) RunCLI() {
 	var (
 		envName           = flag.String("env", ".env", "Env file name to parse")
-		dbVarName         = flag.String("dbEnv", "DATABASE_URL", "Database URL environment variable")
+		dbVarName         = flag.String("dbVar", "DATABASE_URL", "Database URL environment variable")
 		migrationName     = flag.String("new", "", "Name of your migration file")
 		migrationsInit    = flag.Bool("init", false, "Initialize go-migraine")
 		createMigration   = flag.Bool("migration", false, "Start a migration process")
-		runMigrations     = flag.Bool("run", true, "Run all migrations")
-		rollbackMigration = flag.Bool("rollback", true, "Rollback last migration")
+		runMigrations     = flag.Bool("run", false, "Run all migrations")
+		rollbackMigration = flag.Bool("rollback", false, "Rollback last migration")
 	)
 
 	flag.Usage = func() {
@@ -53,8 +52,6 @@ func (cli *CLI) RunCLI() {
 		core.createMigrationsTable()
 	} else if *createMigration {
 		if *runMigrations && len(*migrationName) == 0 {
-			cli.preCheckers()
-
 			db = core.connection()
 
 			if !prevConfig.IsMigrationsTableCreated {
@@ -62,31 +59,18 @@ func (cli *CLI) RunCLI() {
 			}
 
 			core.runAllMigrations()
-		}
-		if len(*migrationName) != 0 && !*runMigrations {
-			cli.preCheckers()
+		} else if len(*migrationName) > 0 && !*runMigrations {
 			db = core.connection()
+			fmt.Println(*migrationName)
 			core.createMigration(*migrationName)
+		} else {
+			flag.Usage()
 		}
 	} else if *rollbackMigration {
-		cli.preCheckers()
 		db = core.connection()
-		core.rollback()
+		core.rollbackLastMigration()
 	} else {
 		flag.Usage()
 		return
-	}
-}
-
-func (cli *CLI) preCheckers() {
-	var config Config
-	var core Core
-
-	prevConfig := config.getConfig()
-
-	if prevConfig.EnvFile != nil && prevConfig.DbVar != nil && prevConfig.IsMigrationsFolderCreated && prevConfig.IsMigrationsTableCreated {
-		core.getDatabaseURL(*prevConfig.EnvFile, prevConfig.DbVar)
-	} else {
-		log.Fatalln(":::cli::: please init migrations first before running this flag")
 	}
 }

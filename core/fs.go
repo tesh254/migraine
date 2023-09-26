@@ -1,10 +1,12 @@
 package core
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/tesh254/go-migraine/constants"
 	"github.com/tesh254/go-migraine/utils"
@@ -21,34 +23,65 @@ func (f *FS) getCurrentDirectory() string {
 	return cwd
 }
 
-func (f *FS) addConfigFileToGitignore() {
+func (f *FS) migrationSqlFileParser(migrationFilename string, isRollback bool) string {
 	cwd := f.getCurrentDirectory()
+	migrationPath := fmt.Sprintf("%s/migrations/%s", cwd, migrationFilename)
+	file, err := os.Open(migrationPath)
 
-	filePath := fmt.Sprintf("%s/%s", cwd, ".gitignore")
-
-	if _, err := os.Stat(filePath); err != nil {
-		f, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
-
-		if err != nil {
-			log.Printf(":::fs::: error opening .gitignore file please add `%s%s%s` to your `%s.gitignore%s`\n", utils.BOLD, constants.CONFIG, utils.RESET, utils.BOLD, utils.RESET)
-			return
-		}
-		log.Printf(":::fs::: found `%s.gitignore%s` updating...\n", utils.BOLD, utils.RESET)
-
-		defer f.Close()
-
-		newLine := fmt.Sprintf("%s\n", constants.CONFIG)
-		if _, err := f.WriteString(newLine); err != nil {
-			log.Printf(":::fs::: error opening .gitignore file please add `%s%s%s` to your `%s.gitignore%s`\n", utils.BOLD, constants.CONFIG, utils.RESET, utils.BOLD, utils.RESET)
-			return
-		}
-		log.Printf(":::fs::: successfully updated your `%s.gitignore%s %s`\n", utils.BOLD, utils.RESET, utils.CHECK)
-		return
+	if err != nil {
+		log.Fatalf(":::fs::: error reading file `%s%s%s`: %v\n", utils.BOLD, migrationPath, utils.RESET, err)
 	}
+	defer file.Close()
+
+	var sqlStatements []string
+	var sqlFound bool
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		line = strings.TrimSpace(line)
+
+		// check if line contains migraine comment marker
+		if strings.HasPrefix(line, "--") {
+			comment := strings.TrimSpace(strings.TrimPrefix(line, "--"))
+
+			if isRollback {
+				if comment == constants.MIGRAINE_DOWN_MARKER {
+					sqlFound = true
+					continue
+				}
+			} else {
+				if comment == constants.MIGRAINE_UP_MARKER {
+					sqlFound = true
+					continue
+				}
+			}
+		}
+
+		// collect sql below comment
+		if sqlFound {
+			if line == "" {
+				break
+			}
+
+			sqlStatements = append(sqlStatements, line)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Fatalf(":::fs::: error while reading `%s%s%s`: %v\n", utils.BOLD, migrationPath, utils.RESET, err)
+	}
+
+	if !sqlFound || len(sqlStatements) == 0 {
+		log.Fatalf(":::fs::: no relevant sql statements found in the migration file `%s%s%s`\n", utils.BOLD, migrationPath, utils.RESET)
+	}
+
+	return strings.Join(sqlStatements, "\n")
 }
 
 func (f *FS) checkIfConfigFileExistsCreateIfNot() {
 	var config Config
+	var vc VersionControl
 	cwd := f.getCurrentDirectory()
 
 	filePath := fmt.Sprintf("%s/%s", cwd, constants.CONFIG)
@@ -69,16 +102,16 @@ func (f *FS) checkIfConfigFileExistsCreateIfNot() {
 			IsMigrationsTableCreated:  false,
 			EnvFile:                   nil,
 			MigrationsPath:            nil,
-			DbVar:                     nil,
+			DbUrl:                     nil,
 			HasDBUrl:                  false,
 		}
 
 		f.writeJSONToFile(filePath, config)
-		f.addConfigFileToGitignore()
+		vc.addConfigFileToGitignore()
 	} else if err != nil {
 		log.Fatalf(":::fs::: error while checking file: %v\n", err)
 	} else {
-		log.Printf(":::fs::: `%s%s%s` exists %s\n", utils.BOLD, constants.CONFIG, utils.RESET, utils.CHECK)
+		log.Printf(":::fs::: using existing `%s%s%s` %s\n", utils.BOLD, constants.CONFIG, utils.RESET, utils.CHECK)
 	}
 }
 

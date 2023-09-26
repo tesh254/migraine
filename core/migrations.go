@@ -7,13 +7,14 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/tesh254/go-migraine/constants"
 	"github.com/tesh254/go-migraine/utils"
 )
 
 type MigrationData struct {
 	FileName      string    `db:"file_name" json:"file_name"`
 	Checksum      string    `db:"checksum" json:"checksum"`
-	TransactionID int       `db:"transaction_id" json:"transaction_id"`
+	TransactionID string    `db:"transaction_id" json:"transaction_id"`
 	AppliedAt     time.Time `db:"applied_at" json:"applied_at"`
 }
 
@@ -21,7 +22,7 @@ type MRow struct {
 	ID            int       `db:"id" json:"id"`
 	FileName      string    `db:"file_name" json:"file_name"`
 	Checksum      string    `db:"checksum" json:"checksum"`
-	TransactionID int       `db:"transaction_id" json:"transaction_id"`
+	TransactionID string    `db:"transaction_id" json:"transaction_id"`
 	AppliedAt     time.Time `db:"applied_at" json:"applied_at"`
 }
 
@@ -33,7 +34,7 @@ func (c *Core) createMigrationsTable() {
 			id serial primary key,
 			file_name varchar(255) not null,
 			checksum varchar(255) not null,
-			transaction_id int not null,
+			transaction_id text not null,
 			applied_at timestamp with time zone default current_timestamp
 		);
 	`
@@ -46,7 +47,7 @@ func (c *Core) createMigrationsTable() {
 	doesFolderExist := fs.checkIfMigrationFolderExists()
 	migrationsPath := "migrations"
 	config.updateMigrationsConfig(doesFolderExist, true, &migrationsPath)
-	log.Println(":::migrations::: | table created successfully ", utils.CHECK)
+	log.Println(":::migrations::: | migrations stash created successfully ", utils.CHECK)
 }
 
 func (c *Core) createMigration(name string) {
@@ -59,7 +60,7 @@ func (c *Core) createMigration(name string) {
 	filename := fmt.Sprintf("%d_%s.sql", unixTime, name)
 	migrationsFolder := fmt.Sprintf("%s/%s", fs.getCurrentDirectory(), *prevConfig.MigrationsPath)
 
-	content := []byte("begin;\ncommit;")
+	content := []byte(constants.MIGRATION_CONTENT)
 
 	filepath := migrationsFolder + "/" + filename
 
@@ -113,7 +114,7 @@ func (c *Core) runAllMigrations() {
 			log.Fatalf(":::migrations::: | error reading file '%s': '%v'\n", filename, err)
 		}
 
-		c.runMigration(filename, utils.GenerateChecksum(utils.StripText(string(content))), string(content))
+		c.runMigration(filename, utils.GenerateChecksum(utils.StripText(string(content))))
 	}
 }
 
@@ -130,10 +131,13 @@ func (c *Core) saveMigration(data MigrationData) {
 	log.Printf(":::migrations::: %s%s%s just applied %s", utils.BOLD, data.FileName, utils.RESET, utils.CHECK)
 }
 
-func (c *Core) runMigration(fileName string, checksum string, migrationQuery string) {
+func (c *Core) runMigration(fileName string, checksum string) {
 	db := c.Db
-	if migrationQuery == "begin;\ncommit;" {
-		log.Println(":::migrations::: migration contains no sql")
+	var fs FS
+	migrationQuery := fs.migrationSqlFileParser(fileName, false)
+
+	if len(utils.StripText(migrationQuery)) == 0 {
+		log.Println(":::migrations::: migration contains no SQL")
 		return
 	}
 
@@ -147,51 +151,107 @@ func (c *Core) runMigration(fileName string, checksum string, migrationQuery str
 	tx, err := db.Begin()
 
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalf(":::migrations::: error beginning transaction: %v\n", err)
+		return
 	}
 
+	// run migrations
 	_, err = tx.Exec(migrationQuery)
-
 	if err != nil {
-		fmt.Println(migrationQuery)
-		log.Fatalln(":::migrations::: error running migration: ", err)
+		log.Fatalf(":::migrations::: error running migration: %v\n", err)
+		tx.Rollback()
+		return
 	}
 
-	var txID int
-	err = tx.QueryRow("select txid_current();").Scan(&txID)
+	// commit transaction
+	err = tx.Commit()
 	if err != nil {
-		log.Fatalln(":::migrations::: error getting transaction ID: ", err)
+		log.Fatalf(":::migrations::: error committing transaction: %v\n", err)
+		tx.Rollback()
+		return
 	}
 
 	var migrationData MigrationData = MigrationData{
 		FileName:      fileName,
 		Checksum:      checksum,
-		TransactionID: txID,
+		TransactionID: utils.GenerateUUID4(),
 	}
 
 	c.saveMigration(migrationData)
 }
 
-func (c *Core) rollback() {
+func (c *Core) rollback(filename string) {
+	var fs FS
 	db := c.Db
-	migration := c.getLastMigration()
 
-	query := fmt.Sprintf(`
-		select pg_terminate_backend (pg_stat_activity.pid)
-		from pg_stat_activity
-		where pg_stat_activity.backend_xid = '%d';
-	`, migration.TransactionID)
-
-	_, err := db.Exec(query)
-
+	// Begin a transaction block
+	tx, err := db.Begin()
 	if err != nil {
-		log.Fatalln(":::migrations::: unable to rollback")
+		log.Fatalln(":::migrations::: unable to begin transaction:", err)
 	}
 
+	query := fs.migrationSqlFileParser(filename, true)
+	// query := fmt.Sprintf(`rollback to savepoint %s;`, savepoint)
+
+	_, err = tx.Exec(query)
+	if err != nil {
+		// Roll back the transaction and handle the error
+		tx.Rollback()
+		log.Fatalln(":::migrations::: unable to rollback:", err)
+	}
+
+	// Commit the transaction
+	err = tx.Commit()
+	if err != nil {
+		log.Fatalln(":::migrations::: unable to commit transaction:", err)
+	}
+}
+
+func (c *Core) rollbackLastMigration() {
+	migration := c.getLastMigration()
+
+	if migration == nil {
+		log.Println(":::migrations::: No migration to rollback.")
+		return
+	}
+
+	c.rollback(migration.FileName)
 	c.deleteMigration(migration.ID, migration.FileName)
 
 	log.Printf(":::migrations::: %s%s%s rolled back successfully %s", utils.BOLD, migration.FileName, utils.RESET, utils.CHECK)
 }
+
+// func (c *Core) rollback() {
+// 	db := c.Db
+// 	migration := c.getLastMigration()
+
+// 	// Begin a transaction block
+// 	tx, err := db.Begin()
+// 	if err != nil {
+// 		log.Fatalln(":::migrations::: unable to begin transaction:", err)
+// 	}
+
+// 	query := fmt.Sprintf(`rollback to savepoint %s;`, migration.TransactionID)
+
+// 	fmt.Println(query)
+
+// 	_, err = tx.Exec(query)
+// 	if err != nil {
+// 		// Roll back the transaction and handle the error
+// 		tx.Rollback()
+// 		log.Fatalln(":::migrations::: unable to rollback:", err)
+// 	}
+
+// 	// Commit the transaction
+// 	err = tx.Commit()
+// 	if err != nil {
+// 		log.Fatalln(":::migrations::: unable to commit transaction:", err)
+// 	}
+
+// 	c.deleteMigration(migration.ID, migration.FileName)
+
+// 	log.Printf(":::migrations::: %s%s%s rolled back successfully %s", utils.BOLD, migration.FileName, utils.RESET, utils.CHECK)
+// }
 
 func (c *Core) getLastMigration() *MRow {
 	query := `select * from migrations order by applied_at desc limit 1`
@@ -203,7 +263,7 @@ func (c *Core) getLastMigration() *MRow {
 	err := row.Scan(&migration.ID, &migration.FileName, &migration.Checksum, &migration.TransactionID, &migration.AppliedAt)
 
 	if err != nil {
-		log.Fatalln(":::migrations::: unable to retrieve last migration")
+		log.Fatalln(":::migrations::: unable to retrieve last migration ", err)
 	}
 
 	return &migration
@@ -215,19 +275,23 @@ func (c *Core) deleteMigration(id int, filename string) {
 	db := c.Db
 	query := `delete from migrations where id = $1`
 
-	_, err := db.Exec(query, id)
+	migrationsDir := config.getConfig().MigrationsPath
 
-	if err != nil {
-		log.Fatalln(":::migrations::: unable to delete migration record")
+	if migrationsDir == nil {
+		log.Fatalf(":::migrations::: | `%smigrations%s` folder does not exist, please initialize repository\n", utils.BOLD, utils.RESET)
 	}
 
-	migrationsPath := fmt.Sprintf("%s/%s", fs.getCurrentDirectory(), *config.getConfig().MigrationsPath)
+	migrationsFilePath := fmt.Sprintf("%s/%s/%s", fs.getCurrentDirectory(), *migrationsDir, filename)
 
-	filePath := fmt.Sprintf(migrationsPath, filename)
-
-	err = os.Remove(filePath)
+	err := os.Remove(migrationsFilePath)
 
 	if err != nil {
 		log.Fatalln(":::migrations::: unable to delete migrations file")
+	}
+
+	_, err = db.Exec(query, id)
+
+	if err != nil {
+		log.Fatalln(":::migrations::: unable to delete migration record")
 	}
 }

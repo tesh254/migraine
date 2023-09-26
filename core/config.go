@@ -13,6 +13,7 @@ type Config struct {
 	IsMigrationsFolderCreated bool    `json:"is_migrations_folder_created"`
 	IsMigrationsTableCreated  bool    `json:"is_migrations_table_created"`
 	EnvFile                   *string `json:"env_file"`
+	DbUrl                     *string `json:"db_url"`
 	DbVar                     *string `json:"db_var"`
 	MigrationsPath            *string `json:"migrations_path"`
 	HasDBUrl                  bool    `json:"has_db_url"`
@@ -26,6 +27,7 @@ func (config *Config) updateMigrationsConfig(IsMigrationsFolderCreated bool, isM
 		IsMigrationsTableCreated:  isMigrationsTableCreated,
 		MigrationsPath:            migrationsPath,
 		EnvFile:                   prevConfig.EnvFile,
+		DbUrl:                     prevConfig.DbUrl,
 		DbVar:                     prevConfig.DbVar,
 		Version:                   constants.VERSION,
 		HasDBUrl:                  prevConfig.HasDBUrl,
@@ -38,12 +40,13 @@ func (config *Config) updateMigrationsConfig(IsMigrationsFolderCreated bool, isM
 	}
 }
 
-func (config *Config) updateEnvConfig(envFile string, dbVar string, hasDBUrl bool) {
+func (config *Config) updateEnvConfig(envFile string, dbVar string, dbUrl string, hasDBUrl bool) {
 	var fs FS
 	prevConfig := config.getConfig()
 
 	configuration := Config{
 		EnvFile:                   &envFile,
+		DbUrl:                     &dbUrl,
 		DbVar:                     &dbVar,
 		IsMigrationsFolderCreated: prevConfig.IsMigrationsFolderCreated,
 		IsMigrationsTableCreated:  prevConfig.IsMigrationsTableCreated,

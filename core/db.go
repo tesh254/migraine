@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"log"
 
 	"database/sql"
@@ -11,10 +10,19 @@ import (
 
 func (c *Core) connection() *sql.DB {
 	var db *sql.DB
+	var config Config
 
-	fmt.Println(c.DbUrl)
+	configuration := config.getConfig()
 
-	db, err := sql.Open("postgres", c.DbUrl)
+	var dbUrl string
+
+	if configuration.DbUrl != nil {
+		dbUrl = *configuration.DbUrl
+	} else {
+		log.Fatalln(":::db::: url is not present please initialize migrations update")
+	}
+
+	db, err := sql.Open("postgres", dbUrl)
 
 	if err != nil {
 		log.Fatalf(":::db::: | unable to reach the database %v\n", err)
