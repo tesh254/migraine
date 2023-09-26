@@ -1,5 +1,3 @@
-Here's an improved version of your Markdown:
-
 # Migraine: A CLI for Managing Migrations in backend project with PostgreSQL
 
 Migraine is a command-line interface (CLI) tool designed to help you manage migrations in your backend project using a PostgreSQL database.
