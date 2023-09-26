@@ -1,8 +1,17 @@
-# Migraine: A CLI for Managing Migrations in backend project with PostgreSQL
+# Migraine: A CLI for managing migrations in backend projects with PostgreSQL
 
 Migraine is a command-line interface (CLI) tool designed to help you manage migrations in your backend project using a PostgreSQL database.
 
-## TOC
+## Table of Contents
+- [Prerequisites](#prerequisites)
+- [Commands](#commands)
+    - [Initialize migraine](#initialize-migraine)
+    - [Create a new migration](#create-a-new-migration)
+    - [Run migrations](#run-migrations)
+    - [Rollback](#rollback)
+    - [Help and Version](#help-and-version)
+- [Migrations](#migrations)
+    - [Writing migrations](#writing-migrations)
 
 ### Prerequisites
 
