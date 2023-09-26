@@ -6,8 +6,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/tesh254/go-migraine/constants"
-	"github.com/tesh254/go-migraine/utils"
+	"github.com/tesh254/migraine/constants"
+	"github.com/tesh254/migraine/utils"
 )
 
 type VersionControl struct {

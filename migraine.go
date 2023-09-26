@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/tesh254/go-migraine/core"
+	"github.com/tesh254/migraine/core"
 )
 
 func main() {

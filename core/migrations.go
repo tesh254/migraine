@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/tesh254/go-migraine/constants"
-	"github.com/tesh254/go-migraine/utils"
+	"github.com/tesh254/migraine/constants"
+	"github.com/tesh254/migraine/utils"
 )
 
 type MigrationData struct {
@@ -220,38 +220,6 @@ func (c *Core) rollbackLastMigration() {
 
 	log.Printf(":::migrations::: %s%s%s rolled back successfully %s", utils.BOLD, migration.FileName, utils.RESET, utils.CHECK)
 }
-
-// func (c *Core) rollback() {
-// 	db := c.Db
-// 	migration := c.getLastMigration()
-
-// 	// Begin a transaction block
-// 	tx, err := db.Begin()
-// 	if err != nil {
-// 		log.Fatalln(":::migrations::: unable to begin transaction:", err)
-// 	}
-
-// 	query := fmt.Sprintf(`rollback to savepoint %s;`, migration.TransactionID)
-
-// 	fmt.Println(query)
-
-// 	_, err = tx.Exec(query)
-// 	if err != nil {
-// 		// Roll back the transaction and handle the error
-// 		tx.Rollback()
-// 		log.Fatalln(":::migrations::: unable to rollback:", err)
-// 	}
-
-// 	// Commit the transaction
-// 	err = tx.Commit()
-// 	if err != nil {
-// 		log.Fatalln(":::migrations::: unable to commit transaction:", err)
-// 	}
-
-// 	c.deleteMigration(migration.ID, migration.FileName)
-
-// 	log.Printf(":::migrations::: %s%s%s rolled back successfully %s", utils.BOLD, migration.FileName, utils.RESET, utils.CHECK)
-// }
 
 func (c *Core) getLastMigration() *MRow {
 	query := `select * from migrations order by applied_at desc limit 1`

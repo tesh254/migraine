@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
+	"github.com/tesh254/migraine/constants"
 )
 
 type CLI struct{}
@@ -18,24 +20,29 @@ func (cli *CLI) RunCLI() {
 		createMigration   = flag.Bool("migration", false, "Start a migration process")
 		runMigrations     = flag.Bool("run", false, "Run all migrations")
 		rollbackMigration = flag.Bool("rollback", false, "Rollback last migration")
+		help              = flag.Bool("help", false, "Show flag options for migraine")
+		version           = flag.Bool("version", false, "Show migraine current installed version")
 	)
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
-		fmt.Println("Options:")
-		flag.PrintDefaults()
+		fmt.Print(constants.MIGRAINE_ASCII)
+		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
+		fmt.Println(constants.CurrentOSWithVersion())
+		fmt.Print(constants.MIGRAINE_USAGE)
 	}
 
 	flag.Parse()
 
-	if !*migrationsInit && !*createMigration && !*runMigrations && !*rollbackMigration {
+	if !*migrationsInit && !*createMigration && !*runMigrations && !*rollbackMigration && !*help && !*version {
 		flag.Usage()
 		return
 	}
 
 	var db *sql.DB
 	var fs FS
-	fs.checkIfConfigFileExistsCreateIfNot()
+	if !*help && !*version {
+		fs.checkIfConfigFileExistsCreateIfNot()
+	}
 	var config Config
 	var core Core
 	prevConfig := config.getConfig()
@@ -45,12 +52,17 @@ func (cli *CLI) RunCLI() {
 		}
 	}()
 
-	if *migrationsInit {
+	switch {
+	case *version:
+		fmt.Println(constants.CurrentOSWithVersion())
+	case *help:
+		flag.Usage()
+	case *migrationsInit:
 		core.getDatabaseURL(*envName, dbVarName)
 		fs.checkIfMigrationFolderExists()
 		db = core.connection()
 		core.createMigrationsTable()
-	} else if *createMigration {
+	case *createMigration:
 		if *runMigrations && len(*migrationName) == 0 {
 			db = core.connection()
 
@@ -61,15 +73,14 @@ func (cli *CLI) RunCLI() {
 			core.runAllMigrations()
 		} else if len(*migrationName) > 0 && !*runMigrations {
 			db = core.connection()
-			fmt.Println(*migrationName)
 			core.createMigration(*migrationName)
 		} else {
 			flag.Usage()
 		}
-	} else if *rollbackMigration {
+	case *rollbackMigration:
 		db = core.connection()
 		core.rollbackLastMigration()
-	} else {
+	default:
 		flag.Usage()
 		return
 	}

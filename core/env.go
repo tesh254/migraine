@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/joho/godotenv"
-	"github.com/tesh254/go-migraine/utils"
+	"github.com/tesh254/migraine/utils"
 )
 
 func (c *Core) getDatabaseURL(envFile string, dbVar *string) {
