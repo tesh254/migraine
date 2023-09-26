@@ -1,6 +1,22 @@
-# Migraine: A CLI for managing migrations in backend projects with PostgreSQL
+```bash
 
-Migraine is a command-line interface (CLI) tool designed to help you manage migrations in your backend project using a PostgreSQL database.
+                                       /$$                              /$$                    
+                                      |__/                             |__/                    
+                         /$$$$$$/$$$$  /$$  /$$$$$$   /$$$$$$  /$$$$$$  /$$ /$$$$$$$   /$$$$$$ 
+                        | $$_  $$_  $$| $$ /$$__  $$ /$$__  $$|____  $$| $$| $$__  $$ /$$__  $$
+                        | $$ \ $$ \ $$| $$| $$  \ $$| $$  \__/ /$$$$$$$| $$| $$  \ $$| $$$$$$$$
+                        | $$ | $$ | $$| $$| $$  | $$| $$      /$$__  $$| $$| $$  | $$| $$_____/
+                        | $$ | $$ | $$| $$|  $$$$$$$| $$     |  $$$$$$$| $$| $$  | $$|  $$$$$$$
+                        |__/ |__/ |__/|__/ \____  $$|__/      \_______/|__/|__/  |__/ \_______/
+                                           /$$  \ $$                                           
+                                          |  $$$$$$/                                           
+                                           \______/                                            
+
+```
+
+# `migraine`: A CLI for managing migrations in backend projects with PostgreSQL
+
+`migraine` is a command-line interface (CLI) tool designed to help you manage migrations in your backend project using a PostgreSQL database.
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
@@ -15,9 +31,9 @@ Migraine is a command-line interface (CLI) tool designed to help you manage migr
 
 ### Prerequisites
 
-- Migraine currently supports only PostgreSQL databases.
+- `migraine` currently supports only PostgreSQL databases.
 - While Migraine doesn't generate SQL queries for you, a planned feature will allow AI-generated SQL queries based on a `prompt` flag.
-- Migraine currently works with PostgreSQL connection strings in your `.env` file, but a feature is in development to use more credential-specific variables as flags or fetch them from a vault.
+- `migraine` currently works with PostgreSQL connection strings in your `.env` file, but a feature is in development to use more credential-specific variables as flags or fetch them from a vault.
 
 ### Commands
 
@@ -103,7 +119,7 @@ After running `migraine --init` successfully, you can create a new migration fil
 migraine --migration --new "<migration_name>"
 ```
 
-You can name your migration in formats like `"create user table"` or `"create_user_table"` (don't forget to use quotes for Migraine to recognize it as a migration name).
+You can name your migration in formats like `"create user table"` or `"create_user_table"` (don't forget to use quotes for `migraine` to recognize it as a migration name).
 
 A new file with the migration name will be created in the migrations folder in this format: `<unix_time>_<migration_name_formatted>.sql`.
 
@@ -112,13 +128,15 @@ If you open the file for editing, it should have the following structure:
 ```sql
 --migraine-up
 
+
 --migraine-down
+
 ```
 
-- `--migraine-up`: Contains SQL that makes changes to the database.
-- `--migraine-down`: Contains SQL that rolls back the changes made by `--migraine-up`.
+- `--migraine-up`: contains SQL that makes changes to the database.
+- `--migraine-down`: contains SQL that rolls back the changes made by `--migraine-up`.
 
-Place your SQL queries immediately after these comments to help Migraine distinguish between making changes and rolling them back.
+Place your SQL queries immediately after these comments to help `migraine` distinguish between making changes and rolling them back.
 
 **Example**:
 
