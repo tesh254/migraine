@@ -1,2 +1,2 @@
 # migraine
-A go package for handling migrations for your go project using `postgresql` database
+A CLI for handling migrations for your go project using `postgresql` database
