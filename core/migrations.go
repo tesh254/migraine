@@ -12,29 +12,26 @@ import (
 )
 
 type MigrationData struct {
-	FileName      string    `db:"file_name" json:"file_name"`
-	Checksum      string    `db:"checksum" json:"checksum"`
-	TransactionID string    `db:"transaction_id" json:"transaction_id"`
-	AppliedAt     time.Time `db:"applied_at" json:"applied_at"`
+	FileName  string    `db:"file_name" json:"file_name"`
+	Checksum  string    `db:"checksum" json:"checksum"`
+	AppliedAt time.Time `db:"applied_at" json:"applied_at"`
 }
 
 type MRow struct {
-	ID            int       `db:"id" json:"id"`
-	FileName      string    `db:"file_name" json:"file_name"`
-	Checksum      string    `db:"checksum" json:"checksum"`
-	TransactionID string    `db:"transaction_id" json:"transaction_id"`
-	AppliedAt     time.Time `db:"applied_at" json:"applied_at"`
+	ID        int       `db:"id" json:"id"`
+	FileName  string    `db:"file_name" json:"file_name"`
+	Checksum  string    `db:"checksum" json:"checksum"`
+	AppliedAt time.Time `db:"applied_at" json:"applied_at"`
 }
 
 func (c *Core) createMigrationsTable() {
 	var config Config
 	var fs FS
 	migrationsSql := `
-		create table if not exists migrations (
+		create table if not exists _migraine_migrations (
 			id serial primary key,
 			file_name varchar(255) not null,
 			checksum varchar(255) not null,
-			transaction_id text not null,
 			applied_at timestamp with time zone default current_timestamp
 		);
 	`
@@ -122,7 +119,7 @@ func (c *Core) saveMigration(data MigrationData) {
 	db := c.Db
 	insertQuery := "INSERT INTO migrations (file_name, checksum, transaction_id, applied_at) values ($1,$2,$3,$4)"
 
-	_, err := db.Exec(insertQuery, data.FileName, data.Checksum, data.TransactionID, time.Now().Format(time.RFC3339))
+	_, err := db.Exec(insertQuery, data.FileName, data.Checksum, time.Now().Format(time.RFC3339))
 
 	if err != nil {
 		log.Fatalln(":::migrations::: error saving migration to the database: ", err)
@@ -172,9 +169,8 @@ func (c *Core) runMigration(fileName string, checksum string) {
 	}
 
 	var migrationData MigrationData = MigrationData{
-		FileName:      fileName,
-		Checksum:      checksum,
-		TransactionID: utils.GenerateUUID4(),
+		FileName: fileName,
+		Checksum: checksum,
 	}
 
 	c.saveMigration(migrationData)
@@ -228,7 +224,7 @@ func (c *Core) getLastMigration() *MRow {
 
 	var migration MRow
 
-	err := row.Scan(&migration.ID, &migration.FileName, &migration.Checksum, &migration.TransactionID, &migration.AppliedAt)
+	err := row.Scan(&migration.ID, &migration.FileName, &migration.Checksum, &migration.AppliedAt)
 
 	if err != nil {
 		log.Fatalln(":::migrations::: unable to retrieve last migration ", err)
