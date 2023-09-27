@@ -117,7 +117,7 @@ func (c *Core) runAllMigrations() {
 
 func (c *Core) saveMigration(data MigrationData) {
 	db := c.Db
-	insertQuery := "INSERT INTO migrations (file_name, checksum, transaction_id, applied_at) values ($1,$2,$3,$4)"
+	insertQuery := "INSERT INTO _migraine_migrations (file_name, checksum, transaction_id, applied_at) values ($1,$2,$3,$4)"
 
 	_, err := db.Exec(insertQuery, data.FileName, data.Checksum, time.Now().Format(time.RFC3339))
 
