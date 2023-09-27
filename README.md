@@ -18,8 +18,12 @@
 
 `migraine` is a command-line interface (CLI) tool designed to help you manage migrations in your backend project using a PostgreSQL database.
 
+---
+
 ## Table of Contents
 
+- [Installation](#installation)
+  - [Homebrew](#homebrew)
 - [Prerequisites](#prerequisites)
 - [Commands](#commands)
   - [Initialize migraine](#initialize-migraine)
@@ -30,6 +34,38 @@
 - [Migrations](#migrations)
   - [Writing migrations](#writing-migrations)
 
+---
+
+### Installation
+System Requirements:
+- macOS(Intel/Apple Silicon) and Linux supported
+
+#### Homebrew
+> We recommend using Homebrew on macOS
+If you don't have Homebrew installed on your macOS use the command below to install it
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+1. Clone the Homebrew tap
+
+```bash
+brew tap tesh254/migraine https://github.com/tesh254/homebrew-migraine
+```
+2. Install `migraine`
+
+```bash
+brew install migraine
+```
+
+To update the package to a new version use
+
+```bash
+brew update
+
+brew upgrade migraine
+```
 ### Prerequisites
 
 - `migraine` currently supports only PostgreSQL databases.
