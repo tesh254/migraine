@@ -74,7 +74,7 @@ func (c *Core) checkForMigration(query string) bool {
 	queryStrip := utils.StripText(query)
 	queryChecksum := utils.GenerateChecksum(queryStrip)
 
-	checkQuery := `select exists(select 1 from migrations where checksum = $1)`
+	checkQuery := `select exists(select 1 from _migraine_migrations where checksum = $1)`
 
 	var exists bool
 	err := c.Db.QueryRow(checkQuery, queryChecksum).Scan(&exists)
@@ -218,7 +218,7 @@ func (c *Core) rollbackLastMigration() {
 }
 
 func (c *Core) getLastMigration() *MRow {
-	query := `select * from migrations order by applied_at desc limit 1`
+	query := `select * from _migraine_migrations order by applied_at desc limit 1`
 
 	row := c.Db.QueryRow(query)
 
@@ -237,7 +237,7 @@ func (c *Core) deleteMigration(id int, filename string) {
 	var config Config
 	var fs FS
 	db := c.Db
-	query := `delete from migrations where id = $1`
+	query := `delete from _migraine_migrations where id = $1`
 
 	migrationsDir := config.getConfig().MigrationsPath
 
