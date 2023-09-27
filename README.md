@@ -41,8 +41,8 @@ System Requirements:
 - macOS(Intel/Apple Silicon) and Linux supported
 
 #### Homebrew
-> We recommend using Homebrew on macOS
-If you don't have Homebrew installed on your macOS use the command below to install it
+> We recommend using Homebrew on macOS/linux{distro that supports it}
+If you don't have Homebrew installed on your macOS/linux use the command below to install it
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
