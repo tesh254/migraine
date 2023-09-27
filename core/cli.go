@@ -12,6 +12,9 @@ import (
 type CLI struct{}
 
 func (cli *CLI) RunCLI() {
+	var fs FS
+	var db *sql.DB
+	var prevConfig Config
 	var (
 		envName           = flag.String("env", ".env", "Env file name to parse")
 		dbVarName         = flag.String("dbVar", "DATABASE_URL", "Database URL environment variable")
@@ -33,19 +36,30 @@ func (cli *CLI) RunCLI() {
 
 	flag.Parse()
 
-	if !*migrationsInit && !*createMigration && !*runMigrations && !*rollbackMigration && !*help && !*version {
+	if *help {
 		flag.Usage()
 		return
 	}
 
-	var db *sql.DB
-	var fs FS
-	if !*help && !*version {
-		fs.checkIfConfigFileExistsCreateIfNot()
+	if *version {
+		fmt.Println(constants.CurrentOSWithVersion())
+		return
 	}
+
+	if !*migrationsInit && !*createMigration && !*runMigrations && !*rollbackMigration {
+		flag.Usage()
+		return
+	}
+
+	fs.checkIfConfigFileExistsCreateIfNot()
+
 	var config Config
 	var core Core
-	prevConfig := config.getConfig()
+
+	if !*help && !*version {
+		prevConfig = config.getConfig()
+	}
+
 	defer func() {
 		if db != nil {
 			db.Close()
@@ -53,10 +67,6 @@ func (cli *CLI) RunCLI() {
 	}()
 
 	switch {
-	case *version:
-		fmt.Println(constants.CurrentOSWithVersion())
-	case *help:
-		flag.Usage()
 	case *migrationsInit:
 		core.getDatabaseURL(*envName, dbVarName)
 		fs.checkIfMigrationFolderExists()

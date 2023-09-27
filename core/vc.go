@@ -38,7 +38,7 @@ func (vc *VersionControl) addConfigFileToGitignore() {
 	}
 
 	newLine := fmt.Sprintf("%s\n", constants.CONFIG)
-	if !vc.containsLine(content, newLine) {
+	if !vc.containsLine(content, constants.CONFIG) {
 		content = append(content, []byte(newLine)...)
 
 		if err := os.WriteFile(filePath, content, os.ModePerm); err != nil {
