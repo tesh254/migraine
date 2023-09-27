@@ -1,16 +1,16 @@
 ```bash
 
-                                       /$$                              /$$                    
-                                      |__/                             |__/                    
-                         /$$$$$$/$$$$  /$$  /$$$$$$   /$$$$$$  /$$$$$$  /$$ /$$$$$$$   /$$$$$$ 
-                        | $$_  $$_  $$| $$ /$$__  $$ /$$__  $$|____  $$| $$| $$__  $$ /$$__  $$
-                        | $$ \ $$ \ $$| $$| $$  \ $$| $$  \__/ /$$$$$$$| $$| $$  \ $$| $$$$$$$$
-                        | $$ | $$ | $$| $$| $$  | $$| $$      /$$__  $$| $$| $$  | $$| $$_____/
-                        | $$ | $$ | $$| $$|  $$$$$$$| $$     |  $$$$$$$| $$| $$  | $$|  $$$$$$$
-                        |__/ |__/ |__/|__/ \____  $$|__/      \_______/|__/|__/  |__/ \_______/
-                                           /$$  \ $$                                           
-                                          |  $$$$$$/                                           
-                                           \______/                                            
+               /$$                              /$$                    
+              |__/                             |__/                    
+ /$$$$$$/$$$$  /$$  /$$$$$$   /$$$$$$  /$$$$$$  /$$ /$$$$$$$   /$$$$$$ 
+| $$_  $$_  $$| $$ /$$__  $$ /$$__  $$|____  $$| $$| $$__  $$ /$$__  $$
+| $$ \ $$ \ $$| $$| $$  \ $$| $$  \__/ /$$$$$$$| $$| $$  \ $$| $$$$$$$$
+| $$ | $$ | $$| $$| $$  | $$| $$      /$$__  $$| $$| $$  | $$| $$_____/
+| $$ | $$ | $$| $$|  $$$$$$$| $$     |  $$$$$$$| $$| $$  | $$|  $$$$$$$
+|__/ |__/ |__/|__/ \____  $$|__/      \_______/|__/|__/  |__/ \_______/
+                   /$$  \ $$                                           
+                  |  $$$$$$/                                           
+                   \______/                                            
 
 ```
 
@@ -19,15 +19,16 @@
 `migraine` is a command-line interface (CLI) tool designed to help you manage migrations in your backend project using a PostgreSQL database.
 
 ## Table of Contents
+
 - [Prerequisites](#prerequisites)
 - [Commands](#commands)
-    - [Initialize migraine](#initialize-migraine)
-    - [Create a new migration](#create-a-new-migration)
-    - [Run migrations](#run-migrations)
-    - [Rollback](#rollback)
-    - [Help and Version](#help-and-version)
+  - [Initialize migraine](#initialize-migraine)
+  - [Create a new migration](#create-a-new-migration)
+  - [Run migrations](#run-migrations)
+  - [Rollback](#rollback)
+  - [Help and Version](#help-and-version)
 - [Migrations](#migrations)
-    - [Writing migrations](#writing-migrations)
+  - [Writing migrations](#writing-migrations)
 
 ### Prerequisites
 
