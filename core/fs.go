@@ -29,54 +29,39 @@ func (f *FS) migrationSqlFileParser(migrationFilename string, isRollback bool) s
 	file, err := os.Open(migrationPath)
 
 	if err != nil {
-		log.Fatalf(":::fs::: error reading file `%s%s%s`: %v\n", utils.BOLD, migrationPath, utils.RESET, err)
+		log.Fatalf(":::fs::: unable to read `%s%s%s` file: %v\n", utils.BOLD, migrationPath, utils.RESET, err)
 	}
-	defer file.Close()
 
-	var sqlStatements []string
-	var sqlFound bool
+	var migrationLines []string
+	var inMigrationBlock bool
 
 	scanner := bufio.NewScanner(file)
+
 	for scanner.Scan() {
 		line := scanner.Text()
-		line = strings.TrimSpace(line)
 
-		// check if line contains migraine comment marker
-		if strings.HasPrefix(line, "--") {
-			comment := strings.TrimSpace(strings.TrimPrefix(line, "--"))
-
-			if isRollback {
-				if comment == constants.MIGRAINE_DOWN_MARKER {
-					sqlFound = true
-					continue
-				}
-			} else {
-				if comment == constants.MIGRAINE_UP_MARKER {
-					sqlFound = true
-					continue
-				}
-			}
+		if strings.Contains(line, "--migraine-up") {
+			inMigrationBlock = !isRollback
+			continue
 		}
 
-		// collect sql below comment
-		if sqlFound {
-			if line == "" {
-				break
-			}
+		if strings.Contains(line, "--migraine-down") {
+			inMigrationBlock = isRollback
+			continue
+		}
 
-			sqlStatements = append(sqlStatements, line)
+		if inMigrationBlock {
+			migrationLines = append(migrationLines, line)
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Fatalf(":::fs::: error while reading `%s%s%s`: %v\n", utils.BOLD, migrationPath, utils.RESET, err)
+		log.Fatalf(":::fs::: unable to file contents for `%s%s%s`: %v\n", utils.BOLD, migrationPath, utils.RESET, err)
 	}
 
-	if !sqlFound || len(sqlStatements) == 0 {
-		log.Fatalf(":::fs::: no relevant sql statements found in the migration file `%s%s%s`\n", utils.BOLD, migrationPath, utils.RESET)
-	}
+	sqlStmt := strings.Join(migrationLines, "\n")
 
-	return strings.Join(sqlStatements, "\n")
+	return sqlStmt
 }
 
 func (f *FS) checkIfConfigFileExistsCreateIfNot() {

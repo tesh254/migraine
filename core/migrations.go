@@ -70,14 +70,14 @@ func (c *Core) createMigration(name string) {
 	log.Printf(":::migrations::: | %s%s%s created successfully %s", utils.BOLD, filename, utils.RESET, utils.CHECK)
 }
 
-func (c *Core) checkForMigration(query string) bool {
+func (c *Core) checkForMigration(query string, filename string) bool {
 	queryStrip := utils.StripText(query)
 	queryChecksum := utils.GenerateChecksum(queryStrip)
 
-	checkQuery := `select exists(select 1 from _migraine_migrations where checksum = $1)`
+	checkQuery := `select exists(select 1 from _migraine_migrations where checksum = $1 or file_name = $2)`
 
 	var exists bool
-	err := c.Db.QueryRow(checkQuery, queryChecksum).Scan(&exists)
+	err := c.Db.QueryRow(checkQuery, queryChecksum, filename).Scan(&exists)
 
 	if err != nil {
 		log.Fatalf(":::migrations::: | error checking for migration: %v\n", err)
@@ -138,10 +138,10 @@ func (c *Core) runMigration(fileName string, checksum string) {
 		return
 	}
 
-	exists := c.checkForMigration(migrationQuery)
+	exists := c.checkForMigration(migrationQuery, fileName)
 
 	if exists {
-		log.Printf(":::migrations::: %s%s%s applied %s", utils.BOLD, fileName, utils.RESET, utils.CHECK)
+		log.Printf(":::migrations::: %s%s%s already applied %s", utils.BOLD, fileName, utils.RESET, utils.CHECK)
 		return
 	}
 
