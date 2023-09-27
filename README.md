@@ -23,7 +23,7 @@
 ## Table of Contents
 
 - [Installation](#installation)
-  - [Homebrew](#homebrew)
+  - [Using Homebrew](#homebrew)
 - [Prerequisites](#prerequisites)
 - [Commands](#commands)
   - [Initialize migraine](#initialize-migraine)
@@ -187,3 +187,8 @@ CREATE TABLE users (
 --migraine-down
 DROP TABLE users;
 ```
+
+### Future Major Improvements
+
+- Adding SQL generation through AI
+- Postgresql monitoring features
