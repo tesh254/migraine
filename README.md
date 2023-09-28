@@ -175,7 +175,13 @@ CREATE TABLE users (
 DROP TABLE users;
 ```
 
-### Future Major Improvements
+### Major Features & Improvements coming your way
 
-- Adding SQL generation through AI
-- Postgresql monitoring features
+- Adding an `adapter` to work with MySQL
+- Generate API endpoints based on database tables
+- Generate documentation from your tables for fast onboarding within teams
+- Adding SQL generation by converting natural language to runnable SQL queries
+- SQL database monitoring features example pointing out `queries` that are taking a long time to process.
+- Generate `typescript` or `golang` schema from your table structure
+
+
