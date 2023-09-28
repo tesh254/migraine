@@ -53,6 +53,56 @@ brew update
 
 brew upgrade migraine
 ```
+
+#### Manual Installation
+
+<details>
+<summary>Please install <strong>jq</strong> if you haven't by running <strong>jq --version</strong> if you get <strong>command not found</strong> as a response. Expand the accordion to install <strong>jq</strong> in your linux/macOS operating system</summary>
+
+1. **Homebrew[macOS]**
+
+```bash
+brew install jq
+```
+
+2. **Debian/Ubuntu:**
+
+```bash
+sudo apt update
+sudo apt install jq
+```
+
+3. **CentOS/RHEL:**
+
+```bash
+sudo yum install jq
+```
+
+4. **Fedora:**
+
+```bash
+sudo dnf install jq
+```
+
+5. **openSUSE:***
+
+```bash
+sudo zypper install jq
+```
+
+6. **Arch Linux:**
+
+```bash
+sudo pacman -S jq
+```
+</details>
+
+After checking for the `jq` package, install migraine with the command below
+
+```bash
+curl -sSL https://github.com/tesh254/bash-migraine/raw/main/install.sh | bash
+```
+
 ### Prerequisites
 
 - `migraine` currently supports only PostgreSQL databases.
