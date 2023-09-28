@@ -1,4 +1,5 @@
-![___migraine_cover___](https://github.com/tesh254/migraine/assets/31078302/4c5b4aca-bdc4-4a41-9287-69df27250c26)
+![___migraine_cover___](https://github.com/tesh254/migraine/assets/31078302/1ef8f232-53b9-4225-b8f9-8f1efb1592e8)
+
 
 
 # `migraine`: A CLI for managing migrations in backend projects with PostgreSQL
