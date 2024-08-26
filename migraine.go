@@ -5,7 +5,6 @@ import (
 )
 
 func main() {
-	var cli core.CLI
-
+	cli := core.CLI{}
 	cli.RunCLI()
 }

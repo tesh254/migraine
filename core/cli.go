@@ -36,6 +36,12 @@ func (cli *CLI) RunCLI() {
 
 	flag.Parse()
 
+	// Check if no flags are provided
+	if len(os.Args) == 1 {
+		cli.StartREPL()
+		return
+	}
+
 	if *help {
 		flag.Usage()
 		return
