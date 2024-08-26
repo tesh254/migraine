@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+set -ex
+
+brew update
+brew install Formula/migraine.rb
+migraine --version
+migraine --help
+mg --version
+mg --help
