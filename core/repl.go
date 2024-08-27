@@ -53,14 +53,7 @@ func (cli *CLI) StartREPL() {
 			if len(args) > 1 {
 				envPath = args[1]
 			}
-			exists, err := utils.CheckEnvVarExists("DATABASE_URL", envPath)
-			if err != nil {
-				utils.LogError(fmt.Sprintf("Error verifying DATABASE_URL: %v", err))
-			} else if exists {
-				utils.ColorPrint("green", "✓ DATABASE_URL is set\n")
-			} else {
-				utils.LogWarning("DATABASE_URL is not set")
-			}
+			core.verify(envPath)
 		case "create":
 			if len(args) < 2 {
 				utils.LogError("Please provide a name for the migration")
