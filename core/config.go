@@ -8,22 +8,28 @@ import (
 	"github.com/tesh254/migraine/utils"
 )
 
+type FeatureFlags struct {
+	VERIFY_DEPS bool `json:"VERIFY_DEPS"`
+	INTROSPECT  bool `json:"INTROSPECT"`
+}
+
 type Config struct {
-	Version                   string  `json:"version"`
-	IsMigrationsFolderCreated bool    `json:"is_migrations_folder_created"`
-	IsMigrationsTableCreated  bool    `json:"is_migrations_table_created"`
-	EnvFile                   *string `json:"env_file"`
-	DbUrl                     *string `json:"db_url"`
-	DbVar                     *string `json:"db_var"`
-	MigrationsPath            *string `json:"migrations_path"`
-	HasDBUrl                  bool    `json:"has_db_url"`
+	Version                   string       `json:"version"`
+	IsMigrationsFolderCreated bool         `json:"is_migrations_folder_created"`
+	IsMigrationsTableCreated  bool         `json:"is_migrations_table_created"`
+	EnvFile                   *string      `json:"env_file"`
+	DbUrl                     *string      `json:"db_url"`
+	DbVar                     *string      `json:"db_var"`
+	MigrationsPath            *string      `json:"migrations_path"`
+	HasDBUrl                  bool         `json:"has_db_url"`
+	FeatureFlags              FeatureFlags `json:"feature_flags"`
 }
 
 func (config *Config) updateMigrationsConfig(IsMigrationsFolderCreated bool, isMigrationsTableCreated bool, migrationsPath *string) {
 	var fs FS
 	prevConfig := config.getConfig()
 	configuration := Config{
-		IsMigrationsFolderCreated: isMigrationsTableCreated,
+		IsMigrationsFolderCreated: IsMigrationsFolderCreated,
 		IsMigrationsTableCreated:  isMigrationsTableCreated,
 		MigrationsPath:            migrationsPath,
 		EnvFile:                   prevConfig.EnvFile,
@@ -38,6 +44,18 @@ func (config *Config) updateMigrationsConfig(IsMigrationsFolderCreated bool, isM
 	if err != nil {
 		log.Fatalf(":::config::: | unable to write to `%s.migraine.config.json%s`\n", utils.BOLD, utils.RESET)
 	}
+}
+
+func (config *Config) UpdateFeatureFlags() {
+
+}
+
+func (config *Config) GetFeatureFlagByKey() {
+
+}
+
+func (config *Config) GetFeatureFlags() {
+
 }
 
 func (config *Config) updateEnvConfig(envFile string, dbVar string, dbUrl string, hasDBUrl bool) {
