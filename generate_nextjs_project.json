@@ -1,0 +1,37 @@
+{
+    "workflow": "v1",
+    "name": "Generate Nextjs App Router Project",
+    "description": "Starts and generates a nextjs project",
+    "steps": [
+        {
+            "command": "mkdir {{PATH}}/{{PROJECT_NAME}}",
+            "description": "create project directory"
+        },
+        {
+            "command": "cd {{PATH}}/{{PROJECT_NAME}}",
+            "description": "change directory"
+        },
+        {
+            "command": "npx create-next-app@latest . {{ARGS}}",
+            "description": "starting nextjs app generation"
+        }
+    ],
+    "actions": {
+        "run_npm": {
+            "command": "npm --prefix {{PATH}}/{{PROJECT_NAME}} run dev",
+            "description": "run development server using npm"
+        },
+        "run_yarn": {
+            "command": "yarn --cwd {{PATH}}/{{PROJECT_NAME}} dev",
+            "description": "run development server using yarn"
+        }
+    },
+    "config": {
+        "args": {
+            "PROJECT_NAME": [
+                "slugify"
+            ]
+        },
+        "store_variables": true
+    }
+}

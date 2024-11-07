@@ -1,46 +1,34 @@
 package core
 
 import (
-	"database/sql"
 	"flag"
 	"fmt"
 	"os"
 
 	"github.com/tesh254/migraine/constants"
+	"github.com/tesh254/migraine/kv"
+	"github.com/tesh254/migraine/utils"
+	"github.com/tesh254/migraine/workflow"
 )
 
 type CLI struct{}
 
 func (cli *CLI) RunCLI() {
-	var fs FS
-	var db *sql.DB
-	var prevConfig Config
 	var (
-		envName           = flag.String("env", ".env", "Env file name to parse")
-		dbVarName         = flag.String("dbVar", "DATABASE_URL", "Database URL environment variable")
-		migrationName     = flag.String("new", "", "Name of your migration file")
-		migrationsInit    = flag.Bool("init", false, "Initialize go-migraine")
-		createMigration   = flag.Bool("migration", false, "Start a migration process")
-		runMigrations     = flag.Bool("run", false, "Run all migrations")
-		rollbackMigration = flag.Bool("rollback", false, "Rollback last migration")
-		help              = flag.Bool("help", false, "Show flag options for migraine")
-		version           = flag.Bool("version", false, "Show migraine current installed version")
+		workflowCommand = flag.String("workflow", "", "Workflow commands (new, execute)")
+		wkCommand       = flag.String("wk", "", "Alias for workflow commands (new, execute)")
+		help            = flag.Bool("help", false, "Show flag options for migraine")
+		version         = flag.Bool("version", false, "Show migraine current installed version")
 	)
 
 	flag.Usage = func() {
-		fmt.Print(constants.MIGRAINE_ASCII)
+		fmt.Print(constants.MIGRAINE_ASCII_V2)
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
 		fmt.Println(constants.CurrentOSWithVersion())
 		fmt.Print(constants.MIGRAINE_USAGE)
 	}
 
 	flag.Parse()
-
-	// Check if no flags are provided
-	if len(os.Args) == 1 {
-		cli.StartREPL()
-		return
-	}
 
 	if *help {
 		flag.Usage()
@@ -52,50 +40,44 @@ func (cli *CLI) RunCLI() {
 		return
 	}
 
-	if !*migrationsInit && !*createMigration && !*runMigrations && !*rollbackMigration {
-		flag.Usage()
+	kvDB, err := kv.InitDB("migraine")
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to initialize kv store: %v", err))
 		return
 	}
+	defer kvDB.Close()
 
-	fs.checkIfConfigFileExistsCreateIfNot()
-
-	var config Config
-	var core Core
-
-	if !*help && !*version {
-		prevConfig = config.getConfig()
-	}
-
-	defer func() {
-		if db != nil {
-			db.Close()
-		}
-	}()
+	store := kv.New(kvDB)
+	templateStore := kv.NewTemplateStoreManager(store)
+	// workflowStore := kv.NewWorkflowStore(store)
 
 	switch {
-	case *migrationsInit:
-		core.getDatabaseURL(*envName, dbVarName)
-		fs.checkIfMigrationFolderExists()
-		db = core.connection()
-		core.createMigrationsTable()
-	case *createMigration:
-		if *runMigrations && len(*migrationName) == 0 {
-			db = core.connection()
-
-			if !prevConfig.IsMigrationsTableCreated {
-				core.createMigrationsTable()
-			}
-
-			core.runAllMigrations()
-		} else if len(*migrationName) > 0 && !*runMigrations {
-			db = core.connection()
-			core.createMigration(*migrationName)
-		} else {
-			flag.Usage()
+	case *workflowCommand != "" || *wkCommand != "":
+		command := *workflowCommand
+		if command == "" {
+			command = *wkCommand
 		}
-	case *rollbackMigration:
-		db = core.connection()
-		core.rollbackLastMigration()
+		args := flag.Args()
+		if len(args) < 1 {
+			utils.LogError("Insufficient arguments for workflow command")
+			flag.Usage()
+			return
+		}
+		switch command {
+		case "new":
+			if len(args) < 2 {
+				utils.LogError("Template file path is required")
+				return
+			}
+			workflow := workflow.WorkflowMapper{}
+			templatePath := args[1]
+			fmt.Println(args)
+			err := workflow.CreateWorkflowTemplate(templatePath, templateStore)
+			if err != nil {
+				utils.LogError(fmt.Sprintf("Failed to create workflow template: %v", err))
+			}
+		}
+
 	default:
 		flag.Usage()
 		return
