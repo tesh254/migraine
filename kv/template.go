@@ -43,8 +43,15 @@ func (ts *TemplateStoreManager) UpdateTemplate(template TemplateItem) error {
 }
 
 func (ts *TemplateStoreManager) DeleteTemplate(slug string) error {
-	key := templateStringConcat(slug)
-	return ts.store.Delete(key)
+	existing, err := ts.GetTemplate(slug)
+	if err != nil {
+		return fmt.Errorf("template not found: %v", err)
+	}
+	if existing == nil {
+		return fmt.Errorf("template '%s' does not exist", slug)
+	}
+
+	return ts.store.Delete(templateStringConcat(slug))
 }
 
 func (ts *TemplateStoreManager) ListTemplates() ([]TemplateItem, error) {

@@ -2,8 +2,32 @@ package utils
 
 import (
 	"encoding/json"
+	"regexp"
+	"sort"
 	"strings"
 )
+
+func ExtractTemplateVars(content string) []string {
+	var variables []string
+	re := regexp.MustCompile(`{{([^}]+)}}`)
+	matches := re.FindAllStringSubmatch(content, -1)
+
+	// Use map to deduplicate variables
+	varsMap := make(map[string]bool)
+	for _, match := range matches {
+		if len(match) > 1 {
+			varsMap[match[1]] = true
+		}
+	}
+
+	// Convert map keys to slice
+	for v := range varsMap {
+		variables = append(variables, v)
+	}
+
+	sort.Strings(variables) // Sort for consistent output
+	return variables
+}
 
 func ExtractEnvVarsFromJSON(jsonStr string) ([]string, error) {
 	var data interface{}
