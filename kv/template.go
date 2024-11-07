@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+const TemplatePrefix = "mg_templates:"
+
 type TemplateItem struct {
 	Slug     string `json:"slug"`
 	Workflow string `json:"workflow"`
@@ -55,7 +57,8 @@ func (ts *TemplateStoreManager) DeleteTemplate(slug string) error {
 }
 
 func (ts *TemplateStoreManager) ListTemplates() ([]TemplateItem, error) {
-	keys, err := ts.store.List("templates:")
+	// Use the same prefix as used in templateStringConcat
+	keys, err := ts.store.List(TemplatePrefix)
 	if err != nil {
 		return nil, err
 	}

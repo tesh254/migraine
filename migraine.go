@@ -1,10 +1,9 @@
 package main
 
 import (
-	"github.com/tesh254/migraine/core"
+	"github.com/tesh254/migraine/cmd"
 )
 
 func main() {
-	cli := core.CLI{}
-	cli.RunCLI()
+	cmd.Execute()
 }
