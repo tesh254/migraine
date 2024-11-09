@@ -12,17 +12,17 @@ type Atom struct {
 }
 
 type Config struct {
-	Args           map[string][]string `json:"args"`
-	StoreVariables bool                `json:"store_variables"`
+	Variables      map[string]interface{} `json:variables`
+	StoreVariables bool                   `json:"store_variables"`
 }
 
 type Workflow struct {
-	Name        string                 `json:"name"`
-	Steps       []Atom                 `json:"steps"`
-	Description *string                `json:"description"`
-	Actions     map[string]Atom        `json:"actions"`
-	Config      map[string]interface{} `json:"config"`
-	UsesSudo    bool                   `json:"uses_sudo"`
+	Name        string          `json:"name"`
+	Steps       []Atom          `json:"steps"`
+	Description *string         `json:"description"`
+	Actions     map[string]Atom `json:"actions"`
+	Config      Config          `json:"config"`
+	UsesSudo    bool            `json:"uses_sudo"`
 }
 
 type WorkflowStore struct {
@@ -145,12 +145,57 @@ func (ws *WorkflowStore) RemoveStep(id string, index int) error {
 	return ws.UpdateWorkflow(id, *workflow)
 }
 
-func (ws *WorkflowStore) UpdateConfig(id string, config map[string]interface{}) error {
+func (ws *WorkflowStore) UpdateConfig(id string, configMap map[string]interface{}) error {
 	workflow, err := ws.GetWorkflow(id)
 	if err != nil {
 		return err
 	}
 
-	workflow.Config = config
+	// Create a new Config struct with proper type conversion
+	newConfig := Config{}
+
+	// Convert and assign Variables
+	if vars, ok := configMap["variables"]; ok {
+		if varsMap, ok := vars.(map[string]interface{}); ok {
+			newConfig.Variables = varsMap
+		} else {
+			return fmt.Errorf("invalid variables format in config")
+		}
+	}
+
+	// Convert and assign StoreVariables
+	if storeVars, ok := configMap["store_variables"]; ok {
+		if boolValue, ok := storeVars.(bool); ok {
+			newConfig.StoreVariables = boolValue
+		} else {
+			return fmt.Errorf("invalid store_variables format in config")
+		}
+	}
+
+	// Update the workflow with the new config
+	workflow.Config = newConfig
 	return ws.UpdateWorkflow(id, *workflow)
+}
+
+// You might also want to add a helper method to validate config
+func validateConfig(config map[string]interface{}) error {
+	// Check for required fields
+	if _, hasVars := config["variables"]; !hasVars {
+		return fmt.Errorf("config must contain 'variables' field")
+	}
+
+	if _, hasStoreVars := config["store_variables"]; !hasStoreVars {
+		return fmt.Errorf("config must contain 'store_variables' field")
+	}
+
+	// Validate types
+	if _, ok := config["variables"].(map[string]interface{}); !ok {
+		return fmt.Errorf("'variables' must be a map")
+	}
+
+	if _, ok := config["store_variables"].(bool); !ok {
+		return fmt.Errorf("'store_variables' must be a boolean")
+	}
+
+	return nil
 }
