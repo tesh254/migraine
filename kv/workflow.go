@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+const WorkflowPrefix = "mg_workflows:"
+
 type Atom struct {
 	Command     string  `json:"command"`
 	Description *string `json:"description"`
@@ -17,6 +19,7 @@ type Config struct {
 }
 
 type Workflow struct {
+	ID          string          `json:"id"`
 	Name        string          `json:"name"`
 	Steps       []Atom          `json:"steps"`
 	Description *string         `json:"description"`
@@ -38,6 +41,7 @@ func NewWorkflowStore(store *Store) *WorkflowStore {
 }
 
 func (ws *WorkflowStore) CreateWorkflow(id string, workflow Workflow) error {
+	workflow.ID = id
 	key := workflowStringConcat(id)
 	return ws.store.Set(key, workflow)
 }
@@ -62,7 +66,7 @@ func (ws *WorkflowStore) DeleteWorkflow(id string) error {
 }
 
 func (ws *WorkflowStore) ListWorkflows() ([]Workflow, error) {
-	keys, err := ws.store.List("workflows:")
+	keys, err := ws.store.List(WorkflowPrefix)
 	if err != nil {
 		return nil, err
 	}

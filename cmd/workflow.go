@@ -14,11 +14,28 @@ var workflowCmd = &cobra.Command{
 }
 
 var workflowAddCmd = &cobra.Command{
-	Use:     "add",
-	Aliases: []string{"-a"},
-	Short:   "Add a new workflow",
+	Use:   "add",
+	Short: "Add a new workflow",
 	Run: func(cmd *cobra.Command, args []string) {
 		handleAddWorkflow()
+	},
+}
+
+var workflowListCmd = &cobra.Command{
+	Use:     "list",
+	Aliases: []string{"ls"},
+	Short:   "List all generate workflows",
+	Run: func(cmd *cobra.Command, args []string) {
+		handleListWorkflows()
+	},
+}
+
+var workflowDeleteCmd = &cobra.Command{
+	Use:     "delete [workflow_id]",
+	Aliases: []string{"del"},
+	Short:   "Delete a workflow",
+	Run: func(cmd *cobra.Command, args []string) {
+		handleDeleteWorkflow(args[0])
 	},
 }
 
@@ -62,6 +79,8 @@ var templateDeleteCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(workflowCmd)
 	workflowCmd.AddCommand(workflowAddCmd)
+	workflowCmd.AddCommand(workflowListCmd)
+	workflowCmd.AddCommand(workflowDeleteCmd)
 	templateCmd.AddCommand(templateNewCmd)
 	templateCmd.AddCommand(templateDeleteCmd)
 	templateCmd.AddCommand(templateListCmd)

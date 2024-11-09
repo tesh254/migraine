@@ -11,11 +11,13 @@ type Config struct {
 }
 
 type Workflow struct {
-	Name        string  `json:"name"`
-	Steps       []Atom  `json:"steps"`
-	Description *string `json:"description"`
-	Actions     map[string]Atom
-	Config      Config `json:"config"`
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	Steps       []Atom          `json:"steps"`
+	Description *string         `json:"description"`
+	Actions     map[string]Atom `json:"actions"`
+	Config      Config          `json:"config"`
+	UsesSudo    bool            `json:"uses_sudo"`
 }
 
 type WorkflowMapper struct {

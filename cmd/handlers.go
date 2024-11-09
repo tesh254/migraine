@@ -182,6 +182,7 @@ func handleAddWorkflow() {
 
 	// Initialize the workflow with basic information
 	kvWorkflow := kv.Workflow{
+		ID:          slugifiedName, // Add the ID field
 		Name:        wk.Name,
 		Steps:       make([]kv.Atom, len(wk.Steps)),
 		Description: wk.Description,
@@ -285,4 +286,84 @@ func handleAddWorkflow() {
 	}
 
 	utils.LogSuccess(fmt.Sprintf("Workflow '%s' created successfully", slugifiedName))
+}
+
+func handleListWorkflows() {
+	kvDB, err := kv.InitDB("migraine")
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to initialize kv store: %v", err))
+		return
+	}
+	defer kvDB.Close()
+
+	store := kv.New(kvDB)
+	workflowStore := kv.NewWorkflowStore(store)
+
+	workflows, err := workflowStore.ListWorkflows()
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to list workflows: %v", err))
+		return
+	}
+
+	if len(workflows) == 0 {
+		fmt.Println("\nNo workflows found")
+		return
+	}
+
+	fmt.Printf("\n%sAvailable Workflows:%s\n\n", utils.BOLD, utils.RESET)
+
+	for i, workflow := range workflows {
+		// Print workflow name, ID (slug), and description
+		fmt.Printf("%d. (%s%s%s) %s\n", i+1, utils.BOLD, workflow.ID, utils.RESET, workflow.Name)
+		if workflow.Description != nil && *workflow.Description != "" {
+			fmt.Printf("   Description: %s\n", *workflow.Description)
+		}
+
+		// Extract and display unique variables from steps and actions
+		variables := make(map[string]bool)
+
+		// Extract from steps
+		for _, step := range workflow.Steps {
+			vars := utils.ExtractTemplateVars(step.Command)
+			for _, v := range vars {
+				variables[v] = true
+			}
+		}
+
+		// Extract from actions
+		for _, action := range workflow.Actions {
+			vars := utils.ExtractTemplateVars(action.Command)
+			for _, v := range vars {
+				variables[v] = true
+			}
+		}
+
+		// Display variables if any exist
+		if len(variables) > 0 {
+			fmt.Printf("   Required Variables:\n")
+			for v := range variables {
+				fmt.Printf("   • %s\n", v)
+			}
+		}
+
+		// Add a newline between workflows for better readability
+		fmt.Println()
+	}
+}
+
+func handleDeleteWorkflow(workflowId string) {
+	kvDB, err := kv.InitDB("migraine")
+	if err != nil {
+		utils.LogError(fmt.Sprintf("failed to initialize kv store: %v", err))
+	}
+	defer kvDB.Close()
+
+	store := kv.New(kvDB)
+	workflowStore := kv.NewWorkflowStore(store)
+
+	if err := workflowStore.DeleteWorkflow(workflowId); err != nil {
+		utils.LogError(fmt.Sprintf("failed to delete workflow: %v", err))
+	}
+
+	utils.LogSuccess(fmt.Sprintf("Workflow '%s' deleted successfully", workflowId))
 }
