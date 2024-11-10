@@ -182,8 +182,9 @@ func handleAddWorkflow() {
 
 	// Initialize the workflow with basic information
 	kvWorkflow := kv.Workflow{
-		ID:          slugifiedName, // Add the ID field
+		ID:          slugifiedName,
 		Name:        wk.Name,
+		PreChecks:   make([]kv.Atom, len(wk.PreChecks)),
 		Steps:       make([]kv.Atom, len(wk.Steps)),
 		Description: wk.Description,
 		Actions:     make(map[string]kv.Atom),
@@ -231,6 +232,20 @@ func handleAddWorkflow() {
 				}
 
 				variableValues[v] = value
+			}
+
+			// Process PreChecks with variables
+			for i, step := range wk.PreChecks {
+				command, err := utils.ApplyVariablesToCommand(step.Command, variableValues)
+				if err != nil {
+					utils.LogError(fmt.Sprintf("Failed to process step command: %v", err))
+					os.Exit(1)
+				}
+
+				kvWorkflow.PreChecks[i] = kv.Atom{
+					Command:     command,
+					Description: step.Description,
+				}
 			}
 
 			// Process Steps with variables

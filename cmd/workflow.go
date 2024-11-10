@@ -46,7 +46,7 @@ var templateCmd = &cobra.Command{
 }
 
 var templateNewCmd = &cobra.Command{
-	Use:   "new [template_file]",
+	Use:   "add [template_file]",
 	Short: "Create a new workflow template",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
