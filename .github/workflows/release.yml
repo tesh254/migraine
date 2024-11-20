@@ -59,7 +59,6 @@ jobs:
     needs: build
     name: Create Release
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/v')
 
     steps:
       - uses: actions/checkout@v4
@@ -101,7 +100,6 @@ jobs:
     needs: release
     name: Update Homebrew Formula
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/v')
 
     steps:
       - uses: actions/checkout@v4
@@ -173,7 +171,6 @@ jobs:
     needs: release
     name: Publish to npm
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/v')
 
     steps:
       - uses: actions/checkout@v4
