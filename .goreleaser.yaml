@@ -1,0 +1,104 @@
+project_name: migraine
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    binary: migraine
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+brews:
+  - name: migraine
+    tap:
+      owner: tesh254
+      name: homebrew-migraine
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    folder: Formula
+    homepage: https://github.com/tesh254/migraine
+    description: A robust CLI tool used to organize and automate complex workflows with templated commands
+    license: MIT
+    test: |
+      system "#{bin}/migraine --version"
+      system "#{bin}/mig --version"
+    install: |
+      bin.install "migraine"
+      bin.install_symlink "migraine" => "mig"
+
+release:
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## {{ .Tag }} ({{ .Date }})
+
+    Welcome to this new release!
+  footer: |
+    ## Thanks!
+
+    For more information, check out the [documentation](https://github.com/tesh254/migraine#readme).
+
+  github:
+    owner: tesh254
+    name: migraine
+
+signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - --output-certificate=${certificate}
+      - --output-signature=${signature}
+      - ${artifact}
+    artifacts: checksum
+    output: true
+
+source:
+  enabled: true
+  name_template: "{{ .ProjectName }}-{{ .Version }}-source"
+  format: "tar.gz"
