@@ -13,40 +13,92 @@ permissions:
   packages: write
 
 jobs:
-  goreleaser:
-    name: Build and Release
-    runs-on: ubuntu-latest
+  build:
+    name: Build Binary
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        arch: [amd64, arm64]
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: darwin
+
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: "1.23"
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v5
-        if: github.event_name == 'push' && contains(github.ref, 'refs/tags/v')
-        with:
-          distribution: goreleaser
-          version: latest
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create dist directory
+        run: mkdir -p dist
 
-      - name: Upload artifacts
+      - name: Build Binary
+        env:
+          GOOS: ${{ matrix.platform }}
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          go build -o dist/migraine-${{ matrix.platform }}-${{ matrix.arch }}
+          cd dist && ln -s migraine-${{ matrix.platform }}-${{ matrix.arch }} mig-${{ matrix.platform }}-${{ matrix.arch }}
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
-        if: github.event_name == 'push' && contains(github.ref, 'refs/tags/v')
         with:
-          name: binaries
-          path: dist/*
+          name: migraine-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            dist/migraine-${{ matrix.platform }}-${{ matrix.arch }}
+            dist/mig-${{ matrix.platform }}-${{ matrix.arch }}
           compression-level: 9
           retention-days: 5
 
+  release:
+    needs: build
+    name: Create Release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          for file in migraine-*; do
+            sha256sum "$file" >> ../checksums.txt
+          done
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/migraine-*
+            checksums.txt
+          name: Release ${{ env.VERSION }}
+          body_path: ${{ github.workspace }}/CHANGELOG.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   publish-homebrew:
-    needs: goreleaser
+    needs: release
     name: Update Homebrew Formula
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && contains(github.ref, 'refs/tags/v')
@@ -56,20 +108,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download release artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: binaries
-          path: dist
-
       - name: Calculate checksums
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
+          # Add sleep to ensure release assets are available
+          sleep 45
+
+          # Download the released binaries
+          curl -LO "https://github.com/tesh254/migraine/releases/download/$VERSION/migraine-darwin-amd64"
+          curl -LO "https://github.com/tesh254/migraine/releases/download/$VERSION/migraine-darwin-arm64"
+
           # Calculate SHA256 checksums
-          echo "SHA256_INTEL=$(sha256sum dist/migraine_darwin_amd64_v1/migraine | awk '{print $1}')" >> $GITHUB_ENV
-          echo "SHA256_ARM=$(sha256sum dist/migraine_darwin_arm64/migraine | awk '{print $1}')" >> $GITHUB_ENV
+          echo "SHA256_INTEL=$(sha256sum migraine-darwin-amd64 | awk '{print $1}')" >> $GITHUB_ENV
+          echo "SHA256_ARM=$(sha256sum migraine-darwin-arm64 | awk '{print $1}')" >> $GITHUB_ENV
 
       - name: Update Homebrew formula
         env:
@@ -88,16 +141,16 @@ jobs:
 
             on_macos do
               if Hardware::CPU.intel?
-                url "https://github.com/tesh254/migraine/releases/download/${VERSION}/migraine_darwin_amd64_v1.tar.gz"
+                url "https://github.com/tesh254/migraine/releases/download/${VERSION}/migraine-darwin-amd64"
                 sha256 "$SHA256_INTEL"
               else
-                url "https://github.com/tesh254/migraine/releases/download/${VERSION}/migraine_darwin_arm64.tar.gz"
+                url "https://github.com/tesh254/migraine/releases/download/${VERSION}/migraine-darwin-arm64"
                 sha256 "$SHA256_ARM"
               end
             end
 
             def install
-              bin.install "migraine"
+              bin.install Dir["migraine-*"][0] => "migraine"
               # Create the mig alias
               bin.install_symlink "migraine" => "mig"
             end
@@ -117,7 +170,7 @@ jobs:
           git push
 
   publish-npm:
-    needs: goreleaser
+    needs: release
     name: Publish to npm
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && contains(github.ref, 'refs/tags/v')
