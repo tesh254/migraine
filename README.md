@@ -1,7 +1,7 @@
 ![migraine](https://github.com/user-attachments/assets/1f1f90d0-3a85-44c8-b84a-b23838bf35c2)
 
-# `migraine`: A CLI for managing migrations in backend projects with PostgreSQL
+# `migraine`
 
-`migraine` is a command-line interface (CLI) tool designed to help developers run repetitive tasks with a single command
+This is a robust CLI tool used to organize and automate complex workflows with templated commands. Users can define, store, and run sequences of shell commands efficiently, featuring variable substitution, pre-flight checks, and discrete actions.
 
 
