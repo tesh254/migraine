@@ -14,8 +14,8 @@ var workflowCmd = &cobra.Command{
 }
 
 var workflowAddCmd = &cobra.Command{
-	Use:   "add",
-	Short: "Add a new workflow",
+	Use:   "new",
+	Short: "Create a new workflow from a template",
 	Run: func(cmd *cobra.Command, args []string) {
 		handleAddWorkflow()
 	},

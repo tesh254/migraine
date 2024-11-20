@@ -8,7 +8,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"github.com/tesh254/migraine/kv"
+	"github.com/tesh254/migraine/run"
 	"github.com/tesh254/migraine/utils"
 	"github.com/tesh254/migraine/workflow"
 )
@@ -381,4 +383,179 @@ func handleDeleteWorkflow(workflowId string) {
 	}
 
 	utils.LogSuccess(fmt.Sprintf("Workflow '%s' deleted successfully", workflowId))
+}
+
+func runPreChecks(workflow *kv.Workflow, variables map[string]string) error {
+	if len(workflow.PreChecks) == 0 {
+		return nil
+	}
+
+	fmt.Printf("\nRunning pre-checks for workflow: %s\n\n", workflow.Name)
+
+	for i, check := range workflow.PreChecks {
+		command, err := utils.ApplyVariablesToCommand(check.Command, variables)
+		if err != nil {
+			return fmt.Errorf("failed to process precheck command: %v", err)
+		}
+
+		utils.ColorSizePrint("blue", "small", fmt.Sprintf("pre_check [%d]: %s\n", i+1, *check.Description))
+		utils.ColorSizePrint("blue", "small", fmt.Sprintf("$_: %s\n\n", command))
+
+		if err := run.ExecuteCommand(command); err != nil {
+			utils.LogError(fmt.Sprintf("precheck failed: %v", err))
+			return fmt.Errorf("precheck failed")
+		}
+
+		fmt.Printf("%s PreCheck completed successfully %s\n\n", utils.CHECK, utils.CHECK)
+	}
+
+	return nil
+}
+
+func executeAction(workflow *kv.Workflow, actionName string, variables map[string]string) error {
+	action, exists := workflow.Actions[actionName]
+	if !exists {
+		return fmt.Errorf("action '%s' not found in workflow", actionName)
+	}
+
+	// Replace variables in command
+	command, err := utils.ApplyVariablesToCommand(action.Command, variables)
+	if err != nil {
+		return fmt.Errorf("failed to process action command: %v", err)
+	}
+
+	fmt.Printf("\nExecuting action: %s\n", *action.Description)
+	fmt.Printf("Command: %s\n", command)
+
+	if err := run.ExecuteCommand(command); err != nil {
+		return fmt.Errorf("failed to execute action: %v", err)
+	}
+
+	fmt.Printf("%s Action completed successfully %s\n", utils.CHECK, utils.CHECK)
+	return nil
+}
+
+func handleRunWorkflow(workflowId string, cmd *cobra.Command) {
+	kvDB, err := kv.InitDB("migraine")
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to initialize store: %v", err))
+		os.Exit(1)
+	}
+	defer kvDB.Close()
+
+	store := kv.New(kvDB)
+	workflowStore := kv.NewWorkflowStore(store)
+
+	workflow, err := workflowStore.GetWorkflow(workflowId)
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to get workflow: %v", err))
+		os.Exit(1)
+	}
+
+	if workflow.UsesSudo {
+		if os.Getuid() != 0 {
+			utils.LogError("This workflow requires sudo privileges. Please run with sudo.")
+			os.Exit(1)
+		}
+	}
+
+	// Process variables from flags
+	variables := make(map[string]string)
+	varFlags, err := cmd.Flags().GetStringArray("var")
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to get variables: %v", err))
+		os.Exit(1)
+	}
+
+	for _, v := range varFlags {
+		parts := strings.SplitN(v, "=", 2)
+		if len(parts) != 2 {
+			utils.LogError(fmt.Sprintf("Invalid variable format: %s. Use KEY=VALUE format", v))
+			os.Exit(1)
+		}
+		variables[parts[0]] = parts[1]
+	}
+
+	// Process remaining variables if store_variables is true
+	if workflow.Config.StoreVariables {
+		reader := bufio.NewReader(os.Stdin)
+		requiredVars := make(map[string]bool)
+
+		// Collect variables from all sources
+		for _, check := range workflow.PreChecks {
+			vars := utils.ExtractTemplateVars(check.Command)
+			for _, v := range vars {
+				requiredVars[v] = true
+			}
+		}
+		for _, step := range workflow.Steps {
+			vars := utils.ExtractTemplateVars(step.Command)
+			for _, v := range vars {
+				requiredVars[v] = true
+			}
+		}
+		for _, action := range workflow.Actions {
+			vars := utils.ExtractTemplateVars(action.Command)
+			for _, v := range vars {
+				requiredVars[v] = true
+			}
+		}
+
+		// Prompt for missing variables
+		for v := range requiredVars {
+			if _, exists := variables[v]; !exists {
+				fmt.Printf("%s: ", v)
+				value, err := reader.ReadString('\n')
+				if err != nil {
+					utils.LogError(fmt.Sprintf("Failed to read input: %v", err))
+					os.Exit(1)
+				}
+				variables[v] = strings.TrimSpace(value)
+			}
+		}
+	}
+
+	// Run pre-checks
+	if err := runPreChecks(workflow, variables); err != nil {
+		os.Exit(1)
+	}
+
+	// Check if we're running specific actions
+	actionFlags, err := cmd.Flags().GetStringArray("action")
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to get action flags: %v", err))
+		os.Exit(1)
+	}
+
+	if len(actionFlags) > 0 {
+		// Execute specified actions
+		for _, actionName := range actionFlags {
+			if err := executeAction(workflow, actionName, variables); err != nil {
+				utils.LogError(fmt.Sprintf("Failed to execute action '%s': %v", actionName, err))
+				os.Exit(1)
+			}
+		}
+		utils.LogSuccess(fmt.Sprintf("Workflow actions completed successfully"))
+		return
+	}
+
+	// Run all steps
+	utils.ColorSizePrint("green", "small", fmt.Sprintf("\nExecuting workflow steps: %s\n\n", workflow.Name))
+	for i, step := range workflow.Steps {
+		command, err := utils.ApplyVariablesToCommand(step.Command, variables)
+		if err != nil {
+			utils.LogError(fmt.Sprintf("Failed to process step command: %v", err))
+			os.Exit(1)
+		}
+
+		utils.ColorSizePrint("blue", "small", fmt.Sprintf("[%d]: %s\n", i+1, *step.Description))
+		utils.ColorSizePrint("blue", "small", fmt.Sprintf("$_: %s\n\n", command))
+
+		if err := run.ExecuteCommand(command); err != nil {
+			utils.LogError(fmt.Sprintf("Failed to execute step %d: %v", i+1, err))
+			os.Exit(1)
+		}
+	}
+
+	utils.LogSuccess(fmt.Sprintf("Workflow '%s' completed successfully", workflow.Name))
 }

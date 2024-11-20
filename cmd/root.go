@@ -9,13 +9,13 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:     "mg",
+	Use:     "migraine",
 	Short:   "Migraine - A CLI for managing personal and server workflows",
+	Aliases: []string{"mig"},
 	Version: constants.VERSION,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Print(constants.MIGRAINE_ASCII_V2)
 		fmt.Println(constants.CurrentOSWithVersion())
-		fmt.Print(constants.MIGRAINE_USAGE)
 	},
 }
 
