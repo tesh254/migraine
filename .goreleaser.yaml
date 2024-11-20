@@ -52,11 +52,16 @@ changelog:
       - Merge branch
 
 brews:
-  - repository:
+  - name: migraine
+    description: A robust CLI tool used to organize and automate complex workflows with templated commands
+    homepage: https://github.com/username/cli
+    tap:
       owner: tesh254
       name: homebrew-migraine
-    homepage: https://github.com/tesh254/migraine
-    description: A robust CLI tool used to organize and automate complex workflows with templated commands
+    commit_author:
+      name: tesh254
+      email: dev@madebyknnls.xyz
+    folder: Formula
     license: MIT
     test: |
       system "#{bin}/migraine --version"
@@ -64,9 +69,6 @@ brews:
     install: |
       bin.install "migraine"
       bin.install_symlink "migraine" => "mig"
-    commit_author:
-      name: goreleaserbot
-      email: bot@goreleaser.com
 
 release:
   draft: false
