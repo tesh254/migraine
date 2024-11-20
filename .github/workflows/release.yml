@@ -1,143 +1,191 @@
-name: migraine releaser
+name: Build and Release
 
 on:
   push:
+    branches: [main]
     tags:
-      - "v*.*.*"
-      - "v*.*.*-alpha.*"
-      - "v*.*.*-beta.*"
-
-permissions:
-  contents: read
+      - "v*"
+  pull_request:
+    branches: [main, "release/*"]
 
 jobs:
-  goreleaser:
-    outputs:
-      hashes: ${{ steps.binary.outputs.hashes }}
-      image: ${{ steps.image.outputs.name }}
-      digest: ${{ steps.image.outputs.digest }}
-    permissions:
-      contents: write # for goreleaser/goreleaser-action to create a GitHub release
-    runs-on: ubuntu-latest
+  # test:
+  #   name: Run Tests
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: actions/setup-go@v4
+  #       with:
+  #         go-version: "1.23"
+  #     - name: Run Tests
+  #       run: go test ./...
+
+  build:
+    needs: test
+    name: Build Binary
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        arch: [amd64, arm64]
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: darwin
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v2.3.4
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.23"
+
+      - name: Build Binary
+        env:
+          GOOS: ${{ matrix.platform }}
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          go build -o dist/migraine-${{ matrix.platform }}-${{ matrix.arch }} ./cmd/migraine
+          # Create alias symbolic link
+          ln -s migraine-${{ matrix.platform }}-${{ matrix.arch }} dist/mig-${{ matrix.platform }}-${{ matrix.arch }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: migraine-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            dist/migraine-${{ matrix.platform }}-${{ matrix.arch }}
+            dist/mig-${{ matrix.platform }}-${{ matrix.arch }}
+
+  release:
+    needs: build
+    name: Create Release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - name: Set up Go
-        uses: actions/setup-go@4d34df0c2316fe8122ab82dc22947d607c0c91f9 # v4.0.0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Generate checksums
+        run: |
+          for file in migraine-*/*; do
+            sha256sum "$file" >> checksums.txt
+          done
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
         with:
-          go-version: "1.21"
-          check-latest: true
-      - name: Run GoReleaser
-        id: goreleaser
-        uses: goreleaser/goreleaser-action@8f67e590f2d095516493f017008adc464e63adb1 # v2.5.0
-        with:
-          version: latest
-          args: release --rm-dist
+          files: |
+            migraine-*/*
+            checksums.txt
+          name: Release ${{ env.VERSION }}
+          body_path: ${{ github.workspace }}/CHANGELOG.md
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Generate binary hashes
-        id: binary
-        env:
-          ARTIFACTS: "${{ steps.goreleaser.outputs.artifacts }}"
-        run: |
-          set -euo pipefail
 
-          checksum_file=$(echo "$ARTIFACTS" | jq -r '.[] | select (.type=="Checksum") | .path')
-          echo "hashes=$(cat $checksum_file | base64 -w0)" >> "$GITHUB_OUTPUT"
-      - name: Image digest
-        id: image
-        env:
-          ARTIFACTS: "${{ steps.goreleaser.outputs.artifacts }}"
-        run: |
-          set -euo pipefail
-          image_and_digest=$(echo "$ARTIFACTS" | jq -r '.[] | select (.type=="Docker Manifest") | .path')
-          image=$(echo "${image_and_digest}" | cut -d'@' -f1 | cut -d':' -f1)
-          digest=$(echo "${image_and_digest}" | cut -d'@' -f2)
-          echo "name=$image" >> "$GITHUB_OUTPUT"
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
-
-  binary-provenance:
-    needs: [goreleaser]
-    permissions:
-      actions: read
-      id-token: write
-      contents: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.9.0
-    with:
-      base64-subjects: "${{ needs.goreleaser.outputs.hashes }}"
-      upload-assets: true
-
-  image-provenance:
-    needs: [goreleaser]
-    permissions:
-      actions: read
-      id-token: write
-      packages: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v1.9.0
-    with:
-      image: ${{ needs.goreleaser.outputs.image }}
-      digest: ${{ needs.goreleaser.outputs.digest }}
-      registry-username: ${{ github.actor }}
-    secrets:
-      registry-password: ${{ secrets.GITHUB_TOKEN }}
-
-  verification-with-slsa-verifier:
-    needs: [goreleaser, binary-provenance]
+  publish-homebrew:
+    needs: release
+    name: Update Homebrew Formula
     runs-on: ubuntu-latest
-    permissions: read-all
-    steps:
-      - name: Install the verifier
-        uses: slsa-framework/slsa-verifier/actions/installer@v2.4.0
+    if: startsWith(github.ref, 'refs/tags/v')
 
-      - name: Download assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PROVENANCE: "${{ needs.binary-provenance.outputs.provenance-name }}"
-        run: |
-          set -euo pipefail
-          gh -R "$GITHUB_REPOSITORY" release download "$GITHUB_REF_NAME" -p "*.tar.gz"
-          gh -R "$GITHUB_REPOSITORY" release download "$GITHUB_REF_NAME" -p "*.zip"
-          gh -R "$GITHUB_REPOSITORY" release download "$GITHUB_REF_NAME" -p "$PROVENANCE"
-      - name: Verify assets
-        env:
-          CHECKSUMS: ${{ needs.goreleaser.outputs.hashes }}
-          PROVENANCE: "${{ needs.binary-provenance.outputs.provenance-name }}"
-        run: |
-          set -euo pipefail
-          checksums=$(echo "$CHECKSUMS" | base64 -d)
-          while read -r line; do
-              fn=$(echo $line | cut -d ' ' -f2)
-              echo "Verifying $fn"
-              slsa-verifier verify-artifact --provenance-path "$PROVENANCE" \
-                                            --source-uri "github.com/$GITHUB_REPOSITORY" \
-                                            --source-tag "$GITHUB_REF_NAME" \
-                                            "$fn"
-          done <<<"$checksums"
-
-  verification-with-cosign:
-    needs: [goreleaser, image-provenance]
-    runs-on: ubuntu-latest
-    permissions: read-all
     steps:
-      - name: Login
-        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+      - uses: actions/checkout@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@11086d25041f77fe8fe7b9ea4e48e3b9192b8f19
-
-      - name: Verify image
-        env:
-          IMAGE: ${{ needs.goreleaser.outputs.image }}
-          DIGEST: ${{ needs.goreleaser.outputs.digest }}
+      - name: Calculate checksums
         run: |
-          cosign verify-attestation \
-             --type slsaprovenance \
-             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-             --certificate-identity-regexp '^https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@refs/tags/v[0-9]+.[0-9]+.[0-9]+$' \
-             $IMAGE@$DIGEST
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+          # Download the released binaries
+          curl -LO "https://github.com/tesh254/migraine/releases/download/$VERSION/migraine-darwin-amd64"
+          curl -LO "https://github.com/tesh254/migraine/releases/download/$VERSION/migraine-darwin-arm64"
+
+          # Calculate SHA256 checksums
+          echo "SHA256_INTEL=$(sha256sum migraine-darwin-amd64 | awk '{print $1}')" >> $GITHUB_ENV
+          echo "SHA256_ARM=$(sha256sum migraine-darwin-arm64 | awk '{print $1}')" >> $GITHUB_ENV
+
+      - name: Update Homebrew formula
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          # Clone the Homebrew tap repository
+          git clone https://$HOMEBREW_TAP_TOKEN@github.com/tesh254/homebrew-migraine.git
+          cd homebrew-migraine
+
+          # Update the formula
+          cat > migraine.rb << EOL
+          class Migraine < Formula
+            desc "A robutst CLI tool used to organize and automate complex workflows with templated commands. Users can define, store, and run sequences of shell commands efficiently, featuring variable substitution, pre-flight checks, and discrete actions."
+            homepage "https://github.com/tesh254/migraine"
+            version "${VERSION#v}"
+
+            on_macos do
+              if Hardware::CPU.intel?
+                url "https://github.com/tesh254/migraine/releases/download/${VERSION}/migraine-darwin-amd64"
+                sha256 "$SHA256_INTEL"
+              else
+                url "https://github.com/tesh254/migraine/releases/download/${VERSION}/migraine-darwin-arm64"
+                sha256 "$SHA256_ARM"
+              end
+            end
+
+            def install
+              bin.install Dir["migraine-*"][0] => "migraine"
+              # Create the mig alias
+              bin.install_symlink "migraine" => "mig"
+            end
+
+            test do
+              system "#{bin}/migraine", "--version"
+              system "#{bin}/mig", "--version"
+            end
+          end
+          EOL
+
+          # Commit and push the changes
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git add migraine.rb
+          git commit -m "Update migraine to ${VERSION}"
+          git push
+
+  publish-npm:
+    needs: release
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Update package version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          npm version $VERSION --no-git-tag-version
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

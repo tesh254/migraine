@@ -7,7 +7,7 @@ import (
 	"github.com/tesh254/migraine/utils"
 )
 
-const VERSION string = "v0.0.2-alpha.5"
+const VERSION string = "v0.0.3"
 const CONFIG string = ".migraine.config.json"
 const MIGRATION_CONTENT = `--migraine-up
 
