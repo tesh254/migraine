@@ -21,7 +21,6 @@ jobs:
   #       run: go test ./...
 
   build:
-    needs: test
     name: Build Binary
     runs-on: ${{ matrix.os }}
     strategy:
