@@ -23,4 +23,5 @@
 go.work
 
 .env
-*.json
+*.sample.json
+workflow_template.json

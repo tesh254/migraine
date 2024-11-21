@@ -1,0 +1,57 @@
+{
+  "name": "migraine-cli",
+  "version": "0.0.5",
+  "description": "A robust CLI tool used to organize and automate complex workflows with templated commands. Users can define, store, and run sequences of shell commands efficiently, featuring variable substitution, pre-flight checks, and discrete actions.",
+  "bin": {
+    "migraine": "./bin/migraine",
+    "mig": "./bin/migraine"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js"
+  },
+  "files": [
+    "bin",
+    "scripts",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tesh254/migraine.git"
+  },
+  "keywords": [
+    "cli",
+    "workflow",
+    "automation",
+    "shell",
+    "commands",
+    "template",
+    "migraine",
+    "task-runner",
+    "development-tools"
+  ],
+  "author": {
+    "name": "tesh254",
+    "url": "https://github.com/tesh254"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/tesh254/migraine/issues"
+  },
+  "homepage": "https://github.com/tesh254/migraine#readme",
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "engines": {
+    "node": ">=14"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}
