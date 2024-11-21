@@ -9,5 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- v0.0.9 [2024-11-21] add ability to load templates from url
 - v0.0.7 [2024-11-21] remove npm publish, update installation docs
 - v0.0.3 [2024-11-21] add workflow features
