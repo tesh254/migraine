@@ -76,6 +76,15 @@ var templateDeleteCmd = &cobra.Command{
 	},
 }
 
+var templateLoadRemoteCmd = &cobra.Command{
+	Use:   "load [url]",
+	Short: "Load a workflow template from a remote URL",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return handleLoadRemoteTemplate(args[0])
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(workflowCmd)
 	workflowCmd.AddCommand(workflowAddCmd)
@@ -84,5 +93,6 @@ func init() {
 	templateCmd.AddCommand(templateNewCmd)
 	templateCmd.AddCommand(templateDeleteCmd)
 	templateCmd.AddCommand(templateListCmd)
+	templateCmd.AddCommand(templateLoadRemoteCmd)
 	workflowCmd.AddCommand(templateCmd)
 }

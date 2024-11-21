@@ -559,3 +559,59 @@ func handleRunWorkflow(workflowId string, cmd *cobra.Command) {
 
 	utils.LogSuccess(fmt.Sprintf("Workflow '%s' completed successfully", workflow.Name))
 }
+
+func handleLoadRemoteTemplate(url string) error {
+	kvDB, err := kv.InitDB("migraine")
+	if err != nil {
+		return fmt.Errorf("failed to initialize kv store: %v", err)
+	}
+	defer kvDB.Close()
+
+	store := kv.New(kvDB)
+	templateStore := kv.NewTemplateStoreManager(store)
+
+	content, err := utils.DownloadTemplate(url)
+	if err != nil {
+		return fmt.Errorf("failed to download template: %v", err)
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("\nEnter template name: ")
+	templateName, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read template name: %v", err)
+	}
+
+	templateName = strings.TrimSpace(templateName)
+	if templateName == "" {
+		return fmt.Errorf("template name cannot be empty")
+	}
+
+	slug := utils.FormatString(templateName)
+
+	existing, err := templateStore.GetTemplate(slug)
+	if err == nil && existing != nil {
+		return fmt.Errorf("template with name '%s' already exists", slug)
+	}
+
+	variables := utils.ExtractTemplateVars(string(content))
+	if len(variables) > 0 {
+		utils.LogInfo("Template variables detected:")
+		for _, v := range variables {
+			fmt.Printf("  • %s\n", v)
+		}
+		fmt.Println()
+	}
+
+	template := kv.TemplateItem{
+		Slug:     slug,
+		Workflow: string(content),
+	}
+
+	if err := templateStore.CreateTemplate(template); err != nil {
+		return fmt.Errorf("failed to create template: %v", err)
+	}
+
+	utils.LogSuccess(fmt.Sprintf("Template '%s' created successfully", slug))
+	return nil
+}
