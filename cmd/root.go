@@ -10,7 +10,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:     "migraine",
-	Short:   "Migraine - A CLI for managing personal and server workflows",
+	Short:   "Migraine - A CLI tool used to organize and automate complex workflows with templated commands. Users can define, store, and run sequences of shell commands efficiently, featuring variable substitution, pre-flight checks, and discrete actions.",
 	Aliases: []string{"mig"},
 	Version: constants.VERSION,
 	Run: func(cmd *cobra.Command, args []string) {

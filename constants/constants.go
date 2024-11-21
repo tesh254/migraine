@@ -7,16 +7,7 @@ import (
 	"github.com/tesh254/migraine/utils"
 )
 
-const VERSION string = "v0.0.6"
-const CONFIG string = ".migraine.config.json"
-const MIGRATION_CONTENT = `--migraine-up
-
-
---migraine-down
-
-`
-const MIGRAINE_UP_MARKER = "migraine-up"
-const MIGRAINE_DOWN_MARKER = "migraine-down"
+const VERSION string = "v0.0.7"
 const MIGRAINE_ASCII = `
 
                /$$                              /$$
