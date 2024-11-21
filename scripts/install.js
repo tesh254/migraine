@@ -7,6 +7,22 @@ const version = process.env.npm_package_version;
 const platform = process.platform;
 const arch = process.arch === "x64" ? "amd64" : process.arch;
 
+// Skip installation if platform is not supported
+if (platform !== "darwin" && platform !== "linux") {
+  console.error(
+    "Unsupported platform. Migraine CLI only supports macOS and Linux.",
+  );
+  process.exit(1);
+}
+
+// Skip installation if architecture is not supported
+if (arch !== "amd64" && arch !== "arm64") {
+  console.error(
+    "Unsupported architecture. Migraine CLI only supports x64 and arm64.",
+  );
+  process.exit(1);
+}
+
 const getBinaryName = () => {
   const os = platform === "darwin" ? "darwin" : "linux";
   return `migraine-${os}-${arch}`;
@@ -20,13 +36,29 @@ const getDownloadUrl = () => {
 const download = (url, dest) => {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest);
+
     https
       .get(url, (response) => {
-        response.pipe(file);
-        file.on("finish", () => {
-          file.close();
-          resolve();
-        });
+        if (response.statusCode === 302) {
+          // Handle redirect
+          https
+            .get(response.headers.location, (redirectedResponse) => {
+              redirectedResponse.pipe(file);
+              file.on("finish", () => {
+                file.close();
+                resolve();
+              });
+            })
+            .on("error", (err) => {
+              fs.unlink(dest, () => reject(err));
+            });
+        } else {
+          response.pipe(file);
+          file.on("finish", () => {
+            file.close();
+            resolve();
+          });
+        }
       })
       .on("error", (err) => {
         fs.unlink(dest, () => reject(err));
@@ -36,18 +68,19 @@ const download = (url, dest) => {
 
 async function install() {
   try {
-    const binPath = path.join(__dirname, "..", "bin");
-    const binaryPath = path.join(binPath, "migraine");
-    const aliasPath = path.join(binPath, "mig");
+    console.log("Installing Migraine CLI...");
 
-    // Create bin directory if it doesn't exist
+    // Create bin directory
+    const binPath = path.join(__dirname, "..", "bin");
     if (!fs.existsSync(binPath)) {
       fs.mkdirSync(binPath, { recursive: true });
     }
 
-    // Download the binary
+    const binaryPath = path.join(binPath, "migraine");
+    const aliasPath = path.join(binPath, "mig");
     const downloadUrl = getDownloadUrl();
-    console.log(`Downloading migraine from ${downloadUrl}`);
+
+    console.log(`Downloading from: ${downloadUrl}`);
     await download(downloadUrl, binaryPath);
 
     // Make binary executable
@@ -59,12 +92,24 @@ async function install() {
     }
     fs.symlinkSync(binaryPath, aliasPath);
 
-    console.log("migraine CLI installed successfully!");
-    console.log('You can now use "migraine" or "mig" command.');
+    console.log("\n✨ Migraine CLI installed successfully!");
+    console.log('You can now use either "migraine" or "mig" commands.\n');
+
+    // Test the installation
+    try {
+      const version = execSync(`${binaryPath} --version`).toString().trim();
+      console.log(`Installed version: ${version}`);
+    } catch (error) {
+      console.log('Note: Run "migraine --version" to verify the installation.');
+    }
   } catch (error) {
-    console.error("Error installing migraine:", error);
+    console.error("\n❌ Error installing Migraine CLI:", error.message);
     process.exit(1);
   }
 }
 
-install();
+// Run installation
+install().catch((error) => {
+  console.error("\n❌ Installation failed:", error.message);
+  process.exit(1);
+});

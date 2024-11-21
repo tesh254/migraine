@@ -59,7 +59,7 @@ jobs:
     needs: build
     name: Create Release
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') # Only run on tag pushes
+    if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
       - uses: actions/checkout@v4
@@ -96,7 +96,7 @@ jobs:
     needs: release
     name: Update Homebrew Formula
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') # Only run on tag pushes
+    if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
       - uses: actions/checkout@v4
@@ -168,7 +168,7 @@ jobs:
     needs: release
     name: Publish to npm
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') # Only run on tag pushes
+    if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
       - uses: actions/checkout@v4
@@ -180,8 +180,21 @@ jobs:
 
       - name: Update package version
         run: |
+          # Extract version from git tag and remove 'v' prefix
           VERSION=${GITHUB_REF#refs/tags/v}
-          npm version $VERSION --no-git-tag-version
+          echo "Current version from tag: $VERSION"
+
+          # Get current version from package.json
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "Current version in package.json: $CURRENT_VERSION"
+
+          # Only update if versions are different
+          if [ "$VERSION" != "$CURRENT_VERSION" ]; then
+            echo "Updating version to $VERSION"
+            npm version $VERSION --no-git-tag-version --allow-same-version
+          else
+            echo "Version $VERSION already set in package.json"
+          fi
 
       - name: Publish to npm
         run: npm publish
