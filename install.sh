@@ -23,8 +23,8 @@ command_exists() {
 
 # Detect OS and architecture
 detect_platform() {
-    local platform
-    local architecture
+    local platform=""
+    local architecture=""
 
     # Detect OS
     case "$(uname -s)" in
@@ -77,7 +77,7 @@ main() {
     if ! command_exists curl && ! command_exists wget; then
         print_message "$RED" "Either curl or wget is required for installation"
         exit 1
-    }
+    fi
 
     # Detect platform
     local platform
