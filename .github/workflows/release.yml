@@ -12,7 +12,21 @@ permissions:
   packages: write
 
 jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Run Tests
+        run: go test -v ./...
   build:
+    needs: test
     name: Build Binary
     runs-on: ${{ matrix.os }}
     strategy:

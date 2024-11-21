@@ -9,9 +9,13 @@ import (
 )
 
 func ExtractTemplateVars(content string) []string {
-	var variables []string
 	re := regexp.MustCompile(`{{([^}]+)}}`)
 	matches := re.FindAllStringSubmatch(content, -1)
+
+	// If no matches found, return nil instead of empty slice
+	if len(matches) == 0 {
+		return nil
+	}
 
 	// Use map to deduplicate variables
 	varsMap := make(map[string]bool)
@@ -22,6 +26,7 @@ func ExtractTemplateVars(content string) []string {
 	}
 
 	// Convert map keys to slice
+	variables := make([]string, 0, len(varsMap))
 	for v := range varsMap {
 		variables = append(variables, v)
 	}
