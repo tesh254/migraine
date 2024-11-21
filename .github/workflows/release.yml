@@ -59,6 +59,7 @@ jobs:
     needs: build
     name: Create Release
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') # Only run on tag pushes
 
     steps:
       - uses: actions/checkout@v4
@@ -78,18 +79,13 @@ jobs:
             sha256sum "$file" >> ../checksums.txt
           done
 
-      - name: Get version from tag
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-
       - name: Create Release
-        id: create_release
         uses: softprops/action-gh-release@v1
         with:
           files: |
             artifacts/migraine-*
             checksums.txt
-          name: Release ${{ env.VERSION }}
+          name: Release ${{ github.ref_name }}
           body_path: ${{ github.workspace }}/CHANGELOG.md
           draft: false
           prerelease: false
@@ -100,6 +96,7 @@ jobs:
     needs: release
     name: Update Homebrew Formula
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') # Only run on tag pushes
 
     steps:
       - uses: actions/checkout@v4
@@ -108,7 +105,7 @@ jobs:
 
       - name: Calculate checksums
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION=${{ github.ref_name }}
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
           # Add sleep to ensure release assets are available
@@ -171,6 +168,7 @@ jobs:
     needs: release
     name: Publish to npm
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') # Only run on tag pushes
 
     steps:
       - uses: actions/checkout@v4
