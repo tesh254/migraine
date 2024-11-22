@@ -7,7 +7,7 @@ import (
 	"github.com/tesh254/migraine/utils"
 )
 
-const VERSION string = "v0.0.11"
+const VERSION string = "v0.0.12"
 const MIGRAINE_ASCII = `
 
                /$$                              /$$

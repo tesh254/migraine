@@ -57,7 +57,7 @@ The script will:
 - Detect your operating system and architecture
 - Download the appropriate binary
 - Install it to `/usr/local/bin` (or `~/.local/bin` if you don't have sudo privileges)
-- Create both `migraine` and `mig` commands
+- Create both `migraine` and `mgr` commands
 - Add the installation directory to your PATH if needed
 
 ### Verifying the Installation
@@ -70,7 +70,7 @@ migraine --version
 
 Or using the short alias:
 ```bash
-mig --version
+mgr --version
 ```
 
 ### Note for Enterprise Users
@@ -80,7 +80,7 @@ If you're installing migraine in an enterprise environment where access to GitHu
 1. Download the binary directly from our [releases page](https://github.com/tesh254/migraine/releases)
 2. Move it to `/usr/local/bin` (or your preferred binary location)
 3. Make it executable with `chmod +x /usr/local/bin/migraine`
-4. Create the alias: `ln -s /usr/local/bin/migraine /usr/local/bin/mig`
+4. Create the alias: `ln -s /usr/local/bin/migraine /usr/local/bin/mgr`
 
 ### Troubleshooting
 

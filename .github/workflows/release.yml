@@ -56,7 +56,7 @@ jobs:
           GOARCH: ${{ matrix.arch }}
         run: |
           go build -o dist/migraine-${{ matrix.platform }}-${{ matrix.arch }}
-          cd dist && ln -s migraine-${{ matrix.platform }}-${{ matrix.arch }} mig-${{ matrix.platform }}-${{ matrix.arch }}
+          cd dist && ln -s migraine-${{ matrix.platform }}-${{ matrix.arch }} mgr-${{ matrix.platform }}-${{ matrix.arch }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -64,7 +64,7 @@ jobs:
           name: migraine-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             dist/migraine-${{ matrix.platform }}-${{ matrix.arch }}
-            dist/mig-${{ matrix.platform }}-${{ matrix.arch }}
+            dist/mgr-${{ matrix.platform }}-${{ matrix.arch }}
           compression-level: 9
           retention-days: 5
 
@@ -159,13 +159,13 @@ jobs:
 
             def install
               bin.install Dir["migraine-*"][0] => "migraine"
-              # Create the mig alias
-              bin.install_symlink "migraine" => "mig"
+              # Create the mgr alias
+              bin.install_symlink "migraine" => "mgr"
             end
 
             test do
               system "#{bin}/migraine", "--version"
-              system "#{bin}/mig", "--version"
+              system "#{bin}/mgr", "--version"
             end
           end
           EOL

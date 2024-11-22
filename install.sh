@@ -121,7 +121,7 @@ main() {
     mv "$binary_path" "${install_dir}/migraine"
 
     # Create symbolic link
-    ln -sf "${install_dir}/migraine" "${install_dir}/mig"
+    ln -sf "${install_dir}/migraine" "${install_dir}/mgr"
 
     # Add to PATH if needed
     if [[ ":$PATH:" != *":$install_dir:"* ]]; then
@@ -132,7 +132,7 @@ main() {
     fi
 
     print_message "$GREEN" "✓ migraine has been installed successfully!"
-    print_message "$GREEN" "✓ You can now use 'migraine' or 'mig' commands"
+    print_message "$GREEN" "✓ You can now use 'migraine' or 'mgr' commands"
     print_message "$BLUE" "Run 'migraine --help' to get started"
 }
 
