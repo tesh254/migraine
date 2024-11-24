@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `v0.1.0`  [2023-11-24] add `info` command for workflow details
+- `v0.1.0`  [2024-11-24] add `info` command for workflow details
 - `v0.0.12` [2024-11-22] update shorthand command to mgr over mig
 - `v0.0.11` [2024-11-21] use default user shell over strictly using bash
 - `v0.0.9`  [2024-11-21] add ability to load templates from url
