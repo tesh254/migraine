@@ -413,6 +413,12 @@ func runPreChecks(workflow *kv.Workflow, variables map[string]string) error {
 }
 
 func executeAction(workflow *kv.Workflow, actionName string, variables map[string]string) error {
+	if len(workflow.PreChecks) > 0 {
+		if err := runPreChecks(workflow, variables); err != nil {
+			return fmt.Errorf("pre-checks failed: %v", err)
+		}
+	}
+
 	action, exists := workflow.Actions[actionName]
 	if !exists {
 		return fmt.Errorf("action '%s' not found in workflow", actionName)
@@ -614,4 +620,100 @@ func handleLoadRemoteTemplate(url string) error {
 
 	utils.LogSuccess(fmt.Sprintf("Template '%s' created successfully", slug))
 	return nil
+}
+
+func handleWorkflowInfo(workflowId string) {
+	kvDB, err := kv.InitDB("migraine")
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to initialize store: %v", err))
+		os.Exit(1)
+	}
+	defer kvDB.Close()
+
+	store := kv.New(kvDB)
+	workflowStore := kv.NewWorkflowStore(store)
+
+	workflow, err := workflowStore.GetWorkflow(workflowId)
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to get workflow: %v", err))
+		os.Exit(1)
+	}
+
+	// Print workflow header
+	fmt.Printf("\n%s%s%s (%s)\n", utils.BOLD, workflow.Name, utils.RESET, workflowId)
+	if workflow.Description != nil && *workflow.Description != "" {
+		utils.ColorPrint("gray", fmt.Sprintf("%s\n", *workflow.Description))
+	}
+
+	// Print Pre-checks
+	if len(workflow.PreChecks) > 0 {
+		fmt.Printf("\n%spre-checks:%s\n", utils.BOLD, utils.RESET)
+		for i, check := range workflow.PreChecks {
+			fmt.Printf("  %d. ", i+1)
+			if check.Description != nil {
+				fmt.Printf("%s\n", *check.Description)
+			}
+			utils.ColorSizePrint("blue", "small", fmt.Sprintf("     %s\n", check.Command))
+		}
+	}
+
+	// Print Steps
+	if len(workflow.Steps) > 0 {
+		fmt.Printf("\n%ssteps:%s\n", utils.BOLD, utils.RESET)
+		utils.ColorSizePrint("gray", "small", fmt.Sprintf("  run: mgr run %s\n\n", workflowId))
+		for i, step := range workflow.Steps {
+			fmt.Printf("  %d. ", i+1)
+			if step.Description != nil {
+				fmt.Printf("%s\n", *step.Description)
+			}
+			utils.ColorSizePrint("blue", "small", fmt.Sprintf("     %s\n", step.Command))
+		}
+	}
+
+	// Print Actions
+	if len(workflow.Actions) > 0 {
+		fmt.Printf("\n%sactions:%s\n", utils.BOLD, utils.RESET)
+		for name, action := range workflow.Actions {
+			fmt.Printf("  %s%s%s\n", utils.BOLD, name, utils.RESET)
+			if action.Description != nil {
+				fmt.Printf("    %s\n", *action.Description)
+			}
+			utils.ColorSizePrint("blue", "small", fmt.Sprintf("    %s\n", action.Command))
+			utils.ColorSizePrint("gray", "small", fmt.Sprintf("    run: mgr run %s -a %s\n", workflowId, name))
+		}
+	}
+
+	// Print Variables
+	vars := make(map[string]bool)
+
+	// Extract variables from pre-checks
+	for _, check := range workflow.PreChecks {
+		for _, v := range utils.ExtractTemplateVars(check.Command) {
+			vars[v] = true
+		}
+	}
+
+	// Extract from steps
+	for _, step := range workflow.Steps {
+		for _, v := range utils.ExtractTemplateVars(step.Command) {
+			vars[v] = true
+		}
+	}
+
+	// Extract from actions
+	for _, action := range workflow.Actions {
+		for _, v := range utils.ExtractTemplateVars(action.Command) {
+			vars[v] = true
+		}
+	}
+
+	if len(vars) > 0 {
+		fmt.Printf("\n%sRequired Variables:%s\n", utils.BOLD, utils.RESET)
+		for v := range vars {
+			fmt.Printf("  • %s\n", v)
+			utils.ColorSizePrint("gray", "small", fmt.Sprintf("    Set with: -v %s=value\n", v))
+		}
+	}
+
+	fmt.Println()
 }

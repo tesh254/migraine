@@ -1,11 +1,11 @@
-name: Build and Release
+name: migraine release
 
 on:
   push:
     tags:
       - "v*"
   pull_request:
-    branches: [main, "release/*"]
+    branches: ["release/*"]
 
 permissions:
   contents: write
