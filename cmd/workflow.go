@@ -39,6 +39,15 @@ var workflowDeleteCmd = &cobra.Command{
 	},
 }
 
+var workflowInfoCmd = &cobra.Command{
+	Use:   "info [workflow_id]",
+	Short: "Display detailed information about a workflow",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		handleWorkflowInfo(args[0])
+	},
+}
+
 var templateCmd = &cobra.Command{
 	Use:     "template",
 	Short:   "Template related commands",
@@ -95,4 +104,5 @@ func init() {
 	templateCmd.AddCommand(templateListCmd)
 	templateCmd.AddCommand(templateLoadRemoteCmd)
 	workflowCmd.AddCommand(templateCmd)
+	workflowCmd.AddCommand(workflowInfoCmd)
 }
