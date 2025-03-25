@@ -161,7 +161,7 @@ func (s *DBService) ReadOperationWithContext(ctx context.Context, operation func
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
-		if err := s.openDB(); err != nil {
+		if err := s.openDB(true); err != nil {
 			done <- err
 			return
 		}
