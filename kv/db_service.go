@@ -54,7 +54,7 @@ func (s *DBService) WithTimeout(duration time.Duration) *DBService {
 }
 
 // openDB opens the database if not already open
-func (s *DBService) openDB() error {
+func (s *DBService) openDB(readOnly bool) error {
 	if s.isOpen {
 		return nil
 	}
@@ -67,8 +67,10 @@ func (s *DBService) openDB() error {
 	// Configure BadgerDB options
 	opts := badger.DefaultOptions(s.dbPath)
 
+	opts.ReadOnly = readOnly
+
 	// Optimize for concurrent access
-	opts.NumCompactors = 1
+	opts.NumCompactors = 2
 	opts.BlockCacheSize = 50 << 20 // 50MB
 	opts.IndexCacheSize = 20 << 20 // 20MB
 
@@ -106,16 +108,16 @@ func (s *DBService) closeDB() {
 
 // ReadOperation performs a read operation with timeout
 func (s *DBService) ReadOperation(operation func(*Store) error) error {
-	return s.operationWithTimeout(operation, false)
+	return s.operationWithTimeout(operation, false, true)
 }
 
 // WriteOperation performs a write operation with timeout
 func (s *DBService) WriteOperation(operation func(*Store) error) error {
-	return s.operationWithTimeout(operation, true)
+	return s.operationWithTimeout(operation, true, false)
 }
 
 // operationWithTimeout executes a database operation with a timeout
-func (s *DBService) operationWithTimeout(operation func(*Store) error, isWrite bool) error {
+func (s *DBService) operationWithTimeout(operation func(*Store) error, isWrite bool, readOnly bool) error {
 	// Create a channel to signal completion
 	done := make(chan error, 1)
 
@@ -124,7 +126,7 @@ func (s *DBService) operationWithTimeout(operation func(*Store) error, isWrite b
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
-		if err := s.openDB(); err != nil {
+		if err := s.openDB(readOnly); err != nil {
 			done <- err
 			return
 		}
@@ -159,7 +161,7 @@ func (s *DBService) ReadOperationWithContext(ctx context.Context, operation func
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
-		if err := s.openDB(); err != nil {
+		if err := s.openDB(true); err != nil {
 			done <- err
 			return
 		}
