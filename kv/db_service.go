@@ -68,7 +68,7 @@ func (s *DBService) openDB() error {
 	opts := badger.DefaultOptions(s.dbPath)
 
 	// Optimize for concurrent access
-	opts.NumCompactors = 1
+	opts.NumCompactors = 2
 	opts.BlockCacheSize = 50 << 20 // 50MB
 	opts.IndexCacheSize = 20 << 20 // 20MB
 
