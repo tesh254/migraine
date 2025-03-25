@@ -9,7 +9,7 @@ import (
 	"github.com/tesh254/migraine/utils"
 )
 
-func (wm *WorkflowMapper) CreateWorkflowTemplate(templatePath string, templateStore *kv.TemplateStoreManager) error {
+func (wm *WorkflowMapper) CreateWorkflowTemplate(templatePath string) error {
 	content, err := os.ReadFile(templatePath)
 	if err != nil {
 		return fmt.Errorf("failed to read template file: %v", err)
@@ -36,7 +36,7 @@ func (wm *WorkflowMapper) CreateWorkflowTemplate(templatePath string, templateSt
 		Workflow: string(content),
 	}
 
-	err = templateStore.CreateTemplate(template)
+	err = kv.CreateTemplateSafe(template)
 	if err != nil {
 		return fmt.Errorf("failed to create template: %v", err)
 	}
