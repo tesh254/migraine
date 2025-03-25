@@ -6,14 +6,17 @@ import (
 	"github.com/dgraph-io/badger/v3"
 )
 
+// Store represents a BadgerDB key-value store
 type Store struct {
 	db *badger.DB
 }
 
+// New creates a new Store instance
 func New(db *badger.DB) *Store {
 	return &Store{db: db}
 }
 
+// Set stores a value for a key
 func (s *Store) Set(key string, value interface{}) error {
 	return s.db.Update(func(txn *badger.Txn) error {
 		bytes, err := json.Marshal(value)
@@ -24,6 +27,7 @@ func (s *Store) Set(key string, value interface{}) error {
 	})
 }
 
+// Get retrieves a value for a key
 func (s *Store) Get(key string, value interface{}) error {
 	return s.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte(key))
@@ -37,12 +41,14 @@ func (s *Store) Get(key string, value interface{}) error {
 	})
 }
 
+// Delete removes a key
 func (s *Store) Delete(key string) error {
 	return s.db.Update(func(txn *badger.Txn) error {
 		return txn.Delete([]byte(key))
 	})
 }
 
+// List returns all keys with a given prefix
 func (s *Store) List(prefix string) ([]string, error) {
 	var keys []string
 	err := s.db.View(func(txn *badger.Txn) error {

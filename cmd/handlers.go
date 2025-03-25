@@ -26,18 +26,8 @@ func handleNewTemplate(templatePath string) error {
 	slug = slug[:len(slug)-len(filepath.Ext(slug))]
 	slug = utils.FormatString(slug)
 
-	// Initialize KV store
-	kvDB, err := kv.InitDB("migraine")
-	if err != nil {
-		return fmt.Errorf("failed to initialize kv store: %v", err)
-	}
-	defer kvDB.Close()
-
-	store := kv.New(kvDB)
-	templateStore := kv.NewTemplateStoreManager(store)
-
 	// Check if template exists
-	existing, err := templateStore.GetTemplate(slug)
+	existing, err := kv.GetTemplateSafe(slug)
 	if err == nil && existing != nil {
 		return fmt.Errorf("template with name '%s' already exists", slug)
 	}
@@ -58,7 +48,7 @@ func handleNewTemplate(templatePath string) error {
 		Workflow: string(content),
 	}
 
-	if err := templateStore.CreateTemplate(template); err != nil {
+	if err := kv.CreateTemplateSafe(template); err != nil {
 		return fmt.Errorf("failed to create template: %v", err)
 	}
 
@@ -67,17 +57,7 @@ func handleNewTemplate(templatePath string) error {
 }
 
 func handleListTemplates() {
-	kvDB, err := kv.InitDB("migraine")
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to initialize kv store: %v", err))
-		return
-	}
-	defer kvDB.Close()
-
-	store := kv.New(kvDB)
-	templateStore := kv.NewTemplateStoreManager(store)
-
-	templates, err := templateStore.ListTemplates()
+	templates, err := kv.ListTemplatesSafe()
 	if err != nil {
 		utils.LogError(fmt.Sprintf("Failed to list templates: %v", err))
 		return
@@ -95,16 +75,7 @@ func handleListTemplates() {
 }
 
 func handleDeleteTemplate(templateName string) error {
-	kvDB, err := kv.InitDB("migraine")
-	if err != nil {
-		return fmt.Errorf("failed to initialize kv store: %v", err)
-	}
-	defer kvDB.Close()
-
-	store := kv.New(kvDB)
-	templateStore := kv.NewTemplateStoreManager(store)
-
-	if err := templateStore.DeleteTemplate(templateName); err != nil {
+	if err := kv.DeleteTemplateSafe(templateName); err != nil {
 		return fmt.Errorf("failed to delete template: %v", err)
 	}
 
@@ -113,18 +84,7 @@ func handleDeleteTemplate(templateName string) error {
 }
 
 func handleAddWorkflow() {
-	kvDB, err := kv.InitDB("migraine")
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to initialize kv store: %v", err))
-		return
-	}
-	defer kvDB.Close()
-
-	store := kv.New(kvDB)
-	templateStore := kv.NewTemplateStoreManager(store)
-	workflowStore := kv.NewWorkflowStore(store)
-
-	templates, err := templateStore.ListTemplates()
+	templates, err := kv.ListTemplatesSafe()
 	if err != nil {
 		utils.LogError(fmt.Sprintf("Failed to list templates: %v", err))
 		os.Exit(1)
@@ -296,7 +256,7 @@ func handleAddWorkflow() {
 	}
 
 	// Create the workflow
-	err = workflowStore.CreateWorkflow(slugifiedName, kvWorkflow)
+	err = kv.CreateWorkflowSafe(slugifiedName, kvWorkflow)
 	if err != nil {
 		utils.LogError(fmt.Sprintf("Failed to create workflow: %v", err))
 		os.Exit(1)
@@ -306,17 +266,7 @@ func handleAddWorkflow() {
 }
 
 func handleListWorkflows() {
-	kvDB, err := kv.InitDB("migraine")
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to initialize kv store: %v", err))
-		return
-	}
-	defer kvDB.Close()
-
-	store := kv.New(kvDB)
-	workflowStore := kv.NewWorkflowStore(store)
-
-	workflows, err := workflowStore.ListWorkflows()
+	workflows, err := kv.ListWorkflowsSafe()
 	if err != nil {
 		utils.LogError(fmt.Sprintf("Failed to list workflows: %v", err))
 		return
@@ -369,16 +319,7 @@ func handleListWorkflows() {
 }
 
 func handleDeleteWorkflow(workflowId string) {
-	kvDB, err := kv.InitDB("migraine")
-	if err != nil {
-		utils.LogError(fmt.Sprintf("failed to initialize kv store: %v", err))
-	}
-	defer kvDB.Close()
-
-	store := kv.New(kvDB)
-	workflowStore := kv.NewWorkflowStore(store)
-
-	if err := workflowStore.DeleteWorkflow(workflowId); err != nil {
+	if err := kv.DeleteWorkflowSafe(workflowId); err != nil {
 		utils.LogError(fmt.Sprintf("failed to delete workflow: %v", err))
 	}
 
@@ -442,17 +383,7 @@ func executeAction(workflow *kv.Workflow, actionName string, variables map[strin
 }
 
 func handleRunWorkflow(workflowId string, cmd *cobra.Command) {
-	kvDB, err := kv.InitDB("migraine")
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to initialize store: %v", err))
-		os.Exit(1)
-	}
-	defer kvDB.Close()
-
-	store := kv.New(kvDB)
-	workflowStore := kv.NewWorkflowStore(store)
-
-	workflow, err := workflowStore.GetWorkflow(workflowId)
+	workflow, err := kv.GetWorkflowSafe(workflowId)
 	if err != nil {
 		utils.LogError(fmt.Sprintf("Failed to get workflow: %v", err))
 		os.Exit(1)
@@ -567,15 +498,6 @@ func handleRunWorkflow(workflowId string, cmd *cobra.Command) {
 }
 
 func handleLoadRemoteTemplate(url string) error {
-	kvDB, err := kv.InitDB("migraine")
-	if err != nil {
-		return fmt.Errorf("failed to initialize kv store: %v", err)
-	}
-	defer kvDB.Close()
-
-	store := kv.New(kvDB)
-	templateStore := kv.NewTemplateStoreManager(store)
-
 	content, err := utils.DownloadTemplate(url)
 	if err != nil {
 		return fmt.Errorf("failed to download template: %v", err)
@@ -595,7 +517,7 @@ func handleLoadRemoteTemplate(url string) error {
 
 	slug := utils.FormatString(templateName)
 
-	existing, err := templateStore.GetTemplate(slug)
+	existing, err := kv.GetTemplateSafe(slug)
 	if err == nil && existing != nil {
 		return fmt.Errorf("template with name '%s' already exists", slug)
 	}
@@ -614,7 +536,7 @@ func handleLoadRemoteTemplate(url string) error {
 		Workflow: string(content),
 	}
 
-	if err := templateStore.CreateTemplate(template); err != nil {
+	if err := kv.CreateTemplateSafe(template); err != nil {
 		return fmt.Errorf("failed to create template: %v", err)
 	}
 
@@ -623,17 +545,7 @@ func handleLoadRemoteTemplate(url string) error {
 }
 
 func handleWorkflowInfo(workflowId string) {
-	kvDB, err := kv.InitDB("migraine")
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to initialize store: %v", err))
-		os.Exit(1)
-	}
-	defer kvDB.Close()
-
-	store := kv.New(kvDB)
-	workflowStore := kv.NewWorkflowStore(store)
-
-	workflow, err := workflowStore.GetWorkflow(workflowId)
+	workflow, err := kv.GetWorkflowSafe(workflowId)
 	if err != nil {
 		utils.LogError(fmt.Sprintf("Failed to get workflow: %v", err))
 		os.Exit(1)
