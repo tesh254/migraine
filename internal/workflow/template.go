@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/tesh254/migraine/kv"
-	"github.com/tesh254/migraine/utils"
+	"github.com/tesh254/migraine/internal/storage/kv"
+	"github.com/tesh254/migraine/pkg/utils"
 )
 
 func (wm *WorkflowMapper) CreateWorkflowTemplate(templatePath string) error {

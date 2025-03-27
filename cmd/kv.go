@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/tesh254/migraine/utils"
+	"github.com/tesh254/migraine/pkg/utils"
 )
 
 var kvCmd = &cobra.Command{

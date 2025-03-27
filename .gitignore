@@ -25,3 +25,4 @@ go.work
 .env
 *.sample.json
 workflow_template.json
+.vscode/
