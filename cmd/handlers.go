@@ -9,10 +9,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/tesh254/migraine/kv"
-	"github.com/tesh254/migraine/run"
-	"github.com/tesh254/migraine/utils"
-	"github.com/tesh254/migraine/workflow"
+	run "github.com/tesh254/migraine/internal/execution"
+	"github.com/tesh254/migraine/internal/storage/kv"
+	"github.com/tesh254/migraine/internal/workflow"
+	"github.com/tesh254/migraine/pkg/utils"
 )
 
 func handleNewTemplate(templatePath string) error {

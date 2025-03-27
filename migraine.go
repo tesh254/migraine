@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/tesh254/migraine/cmd"
-	"github.com/tesh254/migraine/kv"
+	"github.com/tesh254/migraine/internal/storage/kv"
 )
 
 func main() {

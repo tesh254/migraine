@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/tesh254/migraine/constants"
+	"github.com/tesh254/migraine/internal/constants"
 )
 
 var rootCmd = &cobra.Command{

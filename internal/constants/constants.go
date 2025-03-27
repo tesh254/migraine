@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/tesh254/migraine/utils"
+	"github.com/tesh254/migraine/pkg/utils"
 )
 
-const VERSION string = "v0.1.6"
+const VERSION string = "v0.1.7"
 const MIGRAINE_ASCII = `
 
                /$$                              /$$

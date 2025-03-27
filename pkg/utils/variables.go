@@ -128,7 +128,6 @@ func ValidateVariables(required []string, values map[string]string) error {
 }
 
 // SanitizeVariableValue sanitizes a variable value to prevent command injection
-// This is a basic implementation - you might want to add more sanitization rules
 func SanitizeVariableValue(value string) string {
 	unsafe := []string{";", "&", "|", ">", "<", "`", "$", "(", ")", "{", "}", "[", "]", "\"", "'", "\n", "\r"}
 	result := value
