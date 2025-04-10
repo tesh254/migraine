@@ -18,6 +18,7 @@ type DBService struct {
 	mu           sync.Mutex
 	db           *badger.DB
 	isOpen       bool
+	dbReadOnly   bool
 	timeout      time.Duration
 	lastActivity time.Time
 }
@@ -56,7 +57,13 @@ func (s *DBService) WithTimeout(duration time.Duration) *DBService {
 // openDB opens the database if not already open
 func (s *DBService) openDB(readOnly bool) error {
 	if s.isOpen {
-		return nil
+		if readOnly != s.dbReadOnly {
+			// Modes don't match - need to close and reopen
+			s.closeDB()
+		} else {
+			// DB is already open in the correct mode
+			return nil
+		}
 	}
 
 	// Create the directory if it doesn't exist
@@ -94,6 +101,7 @@ func (s *DBService) openDB(readOnly bool) error {
 		return fmt.Errorf("failed to open database: %v", err)
 	}
 	s.isOpen = true
+	s.dbReadOnly = readOnly
 	return nil
 }
 
@@ -102,6 +110,7 @@ func (s *DBService) closeDB() {
 	if s.isOpen && s.db != nil {
 		s.db.Close()
 		s.isOpen = false
+		s.dbReadOnly = false
 		s.db = nil
 	}
 }
