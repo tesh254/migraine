@@ -371,8 +371,8 @@ func executeAction(workflow *kv.Workflow, actionName string, variables map[strin
 		return fmt.Errorf("failed to process action command: %v", err)
 	}
 
-	fmt.Printf("\nExecuting action: %s\n", *action.Description)
-	fmt.Printf("Command: %s\n", command)
+	utils.ColorSizePrint("yellow", "bold", fmt.Sprintf("\n🏃💨 Running action: %s\n", *action.Description))
+	utils.ColorSizePrint("green", "bold", fmt.Sprintf("▲ %s\n", command))
 
 	if err := run.ExecuteCommand(command); err != nil {
 		return fmt.Errorf("failed to execute action: %v", err)
