@@ -72,20 +72,20 @@ func ColorSizePrint(color string, size string, text string) {
 
 // LogInfo prints an info message in blue
 func LogInfo(message string) {
-	fmt.Printf("%s[INFO]%s %s\n", colorBlue, colorReset, message)
+	fmt.Printf("%s𝒊%s %s\n", colorBlue, colorReset, message)
 }
 
 // LogSuccess prints a success message in green
 func LogSuccess(message string) {
-	fmt.Printf("%s[SUCCESS]%s %s\n", colorGreen, colorReset, message)
+	fmt.Printf("%s✓%s %s\n", colorGreen, colorReset, message)
 }
 
 // LogWarning prints a warning message in yellow
 func LogWarning(message string) {
-	fmt.Printf("%s[WARNING]%s %s\n", colorYellow, colorReset, message)
+	fmt.Printf("%s⚠%s %s\n", colorYellow, colorReset, message)
 }
 
 // LogError prints an error message in red
 func LogError(message string) {
-	fmt.Printf("%s[ERROR]%s %s\n", colorRed, colorReset, message)
+	fmt.Printf("%s𝒙%s %s\n", colorRed, colorReset, message)
 }

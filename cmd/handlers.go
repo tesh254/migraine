@@ -331,16 +331,21 @@ func runPreChecks(workflow *kv.Workflow, variables map[string]string) error {
 		return nil
 	}
 
-	fmt.Printf("\nRunning pre-checks for workflow: %s\n\n", workflow.Name)
-
+	fmt.Printf("\n┌─⏹ Running pre-checks for workflow: %s\n", workflow.Name)
 	for i, check := range workflow.PreChecks {
 		command, err := utils.ApplyVariablesToCommand(check.Command, variables)
+		lastCommand := i == len(workflow.PreChecks)-1
+		commandText := fmt.Sprintf("├─ %s\n", command)
+
+		if lastCommand {
+			commandText = fmt.Sprintf("└─⏹ %s\n", command)
+		}
 		if err != nil {
 			return fmt.Errorf("failed to process precheck command: %v", err)
 		}
 
 		utils.ColorSizePrint("blue", "small", fmt.Sprintf("pre_check [%d]: %s\n", i+1, *check.Description))
-		utils.ColorSizePrint("blue", "small", fmt.Sprintf("$_: %s\n\n", command))
+		utils.ColorSizePrint("blue", "small", commandText)
 
 		if err := run.ExecuteCommand(command); err != nil {
 			utils.LogError(fmt.Sprintf("precheck failed: %v", err))
@@ -371,8 +376,8 @@ func executeAction(workflow *kv.Workflow, actionName string, variables map[strin
 		return fmt.Errorf("failed to process action command: %v", err)
 	}
 
-	utils.ColorSizePrint("yellow", "bold", fmt.Sprintf("\n🏃💨 Running action: %s\n", *action.Description))
-	utils.ColorSizePrint("green", "bold", fmt.Sprintf("▲ %s\n", command))
+	utils.ColorSizePrint("yellow", "bold", fmt.Sprintf("\n┌─⏹ Running action: %s\n", *action.Description))
+	utils.ColorSizePrint("green", "bold", fmt.Sprintf("└─⏹ %s\n", command))
 
 	if err := run.ExecuteCommand(command); err != nil {
 		return fmt.Errorf("failed to execute action: %v", err)
@@ -477,23 +482,30 @@ func handleRunWorkflow(workflowId string, cmd *cobra.Command) {
 	}
 
 	// Run all steps
-	utils.ColorSizePrint("green", "small", fmt.Sprintf("\nExecuting workflow steps: %s\n\n", workflow.Name))
+	utils.ColorSizePrint("yellow", "bold", fmt.Sprintf("\n┌─⏹ Executing workflow steps: %s\n", workflow.Name))
 	for i, step := range workflow.Steps {
 		command, err := utils.ApplyVariablesToCommand(step.Command, variables)
+		lastCommand := i == len(workflow.Steps)-1
 		if err != nil {
 			utils.LogError(fmt.Sprintf("Failed to process step command: %v", err))
 			os.Exit(1)
 		}
 
-		utils.ColorSizePrint("blue", "small", fmt.Sprintf("[%d]: %s\n", i+1, *step.Description))
-		utils.ColorSizePrint("blue", "small", fmt.Sprintf("$_: %s\n\n", command))
+		commandText := fmt.Sprintf("├─ %s\n", command)
+
+		if lastCommand {
+			commandText = fmt.Sprintf("└─⏹ %s\n\n", command)
+		}
+
+		utils.ColorSizePrint("yellow", "bold", fmt.Sprintf("├─[%d] %s\n", i+1, *step.Description))
+		utils.ColorSizePrint("green", "bold", commandText)
 
 		if err := run.ExecuteCommand(command); err != nil {
+			fmt.Println("\n")
 			utils.LogError(fmt.Sprintf("Failed to execute step %d: %v", i+1, err))
 			os.Exit(1)
 		}
 	}
-
 	utils.LogSuccess(fmt.Sprintf("Workflow '%s' completed successfully", workflow.Name))
 }
 
