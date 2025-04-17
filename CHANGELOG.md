@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `v1.0.3` [2025-04-17] terminal output restyling
 - `v1.0.0` [2025-04-10] stabilize read and write operations
 - `v0.1.7` [2025-03-25] restructure project files
 - `v0.1.6` [2025-03-25] emulate default terminal behavior and environment when executing workflows
