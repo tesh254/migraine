@@ -568,28 +568,42 @@ func handleWorkflowInfo(workflowId string) {
 		utils.ColorPrint("gray", fmt.Sprintf("%s\n", *workflow.Description))
 	}
 
+	fmt.Println(workflow.PreChecks, ">>>>>")
+
 	// Print Pre-checks
 	if len(workflow.PreChecks) > 0 {
-		fmt.Printf("\n%spre-checks:%s\n", utils.BOLD, utils.RESET)
+		fmt.Printf("\n%s┌─⏹ pre-checks:%s\n", utils.BOLD, utils.RESET)
 		for i, check := range workflow.PreChecks {
-			fmt.Printf("  %d. ", i+1)
 			if check.Description != nil {
-				fmt.Printf("%s\n", *check.Description)
+				fmt.Printf("├─ %s", *check.Description)
 			}
-			utils.ColorSizePrint("blue", "small", fmt.Sprintf("     %s\n", check.Command))
+			isLastCommand := i == len(workflow.PreChecks)-1
+
+			text := fmt.Sprintf("├─ %s\n", check.Command)
+
+			if isLastCommand {
+				text = fmt.Sprintf("└─⏹ %s\n", check.Command)
+			}
+			utils.ColorSizePrint("green", "small", text)
 		}
 	}
 
 	// Print Steps
 	if len(workflow.Steps) > 0 {
-		fmt.Printf("\n%ssteps:%s\n", utils.BOLD, utils.RESET)
-		utils.ColorSizePrint("gray", "small", fmt.Sprintf("  run: mgr run %s\n\n", workflowId))
+		fmt.Printf("\n%s┌─⏹ steps%s\n", utils.BOLD, utils.RESET)
+		utils.ColorSizePrint("gray", "small", fmt.Sprintf("├─ mgr run %s\n\n", workflowId))
 		for i, step := range workflow.Steps {
-			fmt.Printf("  %d. ", i+1)
 			if step.Description != nil {
-				fmt.Printf("%s\n", *step.Description)
+				fmt.Printf("├─ %s\n", *step.Description)
 			}
-			utils.ColorSizePrint("blue", "small", fmt.Sprintf("     %s\n", step.Command))
+			isLastCommand := i == len(workflow.Steps)-1
+
+			text := fmt.Sprintf("├─ %s\n", step.Command)
+
+			if isLastCommand {
+				text = fmt.Sprintf("└─⏹ %s\n", step.Command)
+			}
+			utils.ColorSizePrint("green", "small", text)
 		}
 	}
 
@@ -597,12 +611,12 @@ func handleWorkflowInfo(workflowId string) {
 	if len(workflow.Actions) > 0 {
 		fmt.Printf("\n%sactions:%s\n", utils.BOLD, utils.RESET)
 		for name, action := range workflow.Actions {
-			fmt.Printf("  %s%s%s\n", utils.BOLD, name, utils.RESET)
+			fmt.Printf("%s┌─⏹ %s%s\n", utils.BOLD, name, utils.RESET)
 			if action.Description != nil {
-				fmt.Printf("    %s\n", *action.Description)
+				fmt.Printf("├─ %s\n", *action.Description)
 			}
-			utils.ColorSizePrint("blue", "small", fmt.Sprintf("    %s\n", action.Command))
-			utils.ColorSizePrint("gray", "small", fmt.Sprintf("    run: mgr run %s -a %s\n", workflowId, name))
+			utils.ColorSizePrint("green", "small", fmt.Sprintf("├─ %s\n", action.Command))
+			utils.ColorSizePrint("gray", "bold", fmt.Sprintf("└─⏹ mgr run %s -a %s\n", workflowId, name))
 		}
 	}
 
