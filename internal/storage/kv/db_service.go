@@ -54,21 +54,37 @@ func (s *DBService) WithTimeout(duration time.Duration) *DBService {
 	return s
 }
 
+// databaseExists checks if the database file exists
+func (s *DBService) databaseExists() bool {
+	manifestPath := filepath.Join(s.dbPath, "MANIFEST")
+	_, err := os.Stat(manifestPath)
+	return !os.IsNotExist(err)
+}
+
+// initializeEmptyDatabase creates an empty database if it doesn't exist
+func (s *DBService) initializeEmptyDatabase() error {
+	return s.operationWithTimeout(func(store *Store) error {
+		return nil
+	}, true, false)
+}
+
 // openDB opens the database if not already open
 func (s *DBService) openDB(readOnly bool) error {
 	if s.isOpen {
-		if readOnly != s.dbReadOnly {
-			// Modes don't match - need to close and reopen
-			s.closeDB()
-		} else {
-			// DB is already open in the correct mode
-			return nil
-		}
+		return nil
 	}
 
 	// Create the directory if it doesn't exist
 	if err := os.MkdirAll(s.dbPath, 0755); err != nil {
 		return fmt.Errorf("failed to create database directory: %v", err)
+	}
+
+	if readOnly {
+		// Check if database files exist
+		manifestPath := filepath.Join(s.dbPath, "MANIFEST")
+		if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
+			return fmt.Errorf("no database found at %s, cannot open in read-only mode", s.dbPath)
+		}
 	}
 
 	// Configure BadgerDB options
@@ -82,6 +98,9 @@ func (s *DBService) openDB(readOnly bool) error {
 	opts.IndexCacheSize = 20 << 20 // 20MB
 
 	logsDir := filepath.Join(s.dbPath, "logs")
+	if err := os.MkdirAll(logsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create logs directory: %v", err)
+	}
 
 	var err error
 
@@ -117,6 +136,16 @@ func (s *DBService) closeDB() {
 
 // ReadOperation performs a read operation with timeout
 func (s *DBService) ReadOperation(operation func(*Store) error) error {
+	s.mu.Lock()
+	dbExists := s.databaseExists()
+	s.mu.Unlock()
+
+	if !dbExists {
+		if err := s.initializeEmptyDatabase(); err != nil {
+			return fmt.Errorf("failed to initialize store: %v", err)
+		}
+	}
+
 	return s.operationWithTimeout(operation, false, true)
 }
 

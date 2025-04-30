@@ -7,7 +7,7 @@ import (
 	"github.com/tesh254/migraine/pkg/utils"
 )
 
-const VERSION string = "v1.0.3"
+const VERSION string = "v1.0.4"
 const MIGRAINE_ASCII = `
 
                /$$                              /$$
@@ -37,15 +37,6 @@ const MIGRAINE_ASCII_V2 = `
 @@@@@@@@@@@@@@@@@@@@@=.       :+@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@%%%%@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-`
-const MIGRAINE_USAGE = `
-migraine [options]
-
-migraine --help
-	Show migraine usage
-
-migraine --version
-	Show migraine's current version
 `
 
 func CurrentOSWithVersion() string {

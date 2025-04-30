@@ -390,7 +390,7 @@ func executeAction(workflow *kv.Workflow, actionName string, variables map[strin
 func handleRunWorkflow(workflowId string, cmd *cobra.Command) {
 	workflow, err := kv.GetWorkflowSafe(workflowId)
 	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to get workflow: %v", err))
+		utils.LogError("workflow not found")
 		os.Exit(1)
 	}
 
