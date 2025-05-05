@@ -71,7 +71,11 @@ func (s *DBService) initializeEmptyDatabase() error {
 // openDB opens the database if not already open
 func (s *DBService) openDB(readOnly bool) error {
 	if s.isOpen {
-		return nil
+		if s.dbReadOnly != readOnly {
+			s.closeDB()
+		} else {
+			return nil
+		}
 	}
 
 	// Create the directory if it doesn't exist
