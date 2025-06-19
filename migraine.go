@@ -4,8 +4,11 @@ import (
 	"time"
 
 	"github.com/tesh254/migraine/cmd"
+	"github.com/tesh254/migraine/internal/constants"
 	"github.com/tesh254/migraine/internal/storage/kv"
 )
+
+var Version = constants.VERSION
 
 func main() {
 	// Set up auto DB closure after 5 minutes of inactivity

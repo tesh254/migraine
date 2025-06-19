@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `v1.0.6` [2025-06-19] introduce fang usage
 - `v1.0.5` [2025-04-30] ensure store exists before read operations
 - `v1.0.4` [2025-04-30] ensure store exists before read operations
 - `v1.0.3` [2025-04-17] terminal output restyling

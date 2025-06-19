@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -25,6 +27,17 @@ jobs:
 
       - name: Run Tests
         run: go test -v ./...
+
+      - name: Test version info (development build)
+        run: |
+          go build -o migraine-test .
+          echo "=== Testing version extraction ==="
+          ./migraine-test version
+          ./migraine-test version --json
+          echo "=== Testing build info ==="
+          ./migraine-test buildinfo
+          rm migraine-test
+
   build:
     needs: test
     name: Build Binary
@@ -41,6 +54,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -55,8 +70,30 @@ jobs:
           GOOS: ${{ matrix.platform }}
           GOARCH: ${{ matrix.arch }}
         run: |
-          go build -o dist/migraine-${{ matrix.platform }}-${{ matrix.arch }}
+          # Build with BuildInfo - no ldflags needed!
+          go build -o dist/migraine-${{ matrix.platform }}-${{ matrix.arch }} .
           cd dist && ln -s migraine-${{ matrix.platform }}-${{ matrix.arch }} mgr-${{ matrix.platform }}-${{ matrix.arch }}
+
+      - name: Test version info
+        if: matrix.platform == 'linux' && matrix.arch == 'amd64'
+        run: |
+          echo "=== Testing built binary version info ==="
+          ./dist/migraine-linux-amd64 version
+          echo ""
+          echo "=== Testing JSON output ==="
+          ./dist/migraine-linux-amd64 version --json
+          echo ""
+          echo "=== Testing short version ==="
+          ./dist/migraine-linux-amd64 version --short
+          echo ""
+          echo "=== Testing build info ==="
+          ./dist/migraine-linux-amd64 buildinfo
+
+      - name: Verify mgr symlink
+        if: matrix.platform == 'linux' && matrix.arch == 'amd64'
+        run: |
+          echo "=== Testing mgr symlink ==="
+          ./dist/mgr-linux-amd64 version --short
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -85,12 +122,29 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Test downloaded artifacts
+        run: |
+          cd artifacts
+          echo "=== Downloaded files ==="
+          ls -la
+          echo ""
+          echo "=== Testing Linux binary version ==="
+          chmod +x migraine-linux-amd64
+          ./migraine-linux-amd64 version
+          echo ""
+          echo "=== Verifying this is a release build ==="
+          ./migraine-linux-amd64 version --json | grep -E '"version"|"is_modified"'
+
       - name: Generate checksums
         run: |
           cd artifacts
           for file in migraine-*; do
-            sha256sum "$file" >> ../checksums.txt
+            if [ -f "$file" ] && [ ! -L "$file" ]; then
+              sha256sum "$file" >> ../checksums.txt
+            fi
           done
+          echo "=== Generated checksums ==="
+          cat ../checksums.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -128,6 +182,14 @@ jobs:
           curl -LO "https://github.com/tesh254/migraine/releases/download/$VERSION/migraine-darwin-amd64"
           curl -LO "https://github.com/tesh254/migraine/releases/download/$VERSION/migraine-darwin-arm64"
 
+          # Test the downloaded binaries
+          chmod +x migraine-darwin-amd64 migraine-darwin-arm64
+          echo "=== Testing downloaded macOS binaries ==="
+          echo "AMD64 version:"
+          file migraine-darwin-amd64
+          echo "ARM64 version:"
+          file migraine-darwin-arm64
+
           # Calculate SHA256 checksums
           echo "SHA256_INTEL=$(sha256sum migraine-darwin-amd64 | awk '{print $1}')" >> $GITHUB_ENV
           echo "SHA256_ARM=$(sha256sum migraine-darwin-arm64 | awk '{print $1}')" >> $GITHUB_ENV
@@ -140,7 +202,7 @@ jobs:
           git clone https://$HOMEBREW_TAP_TOKEN@github.com/tesh254/homebrew-migraine.git
           cd homebrew-migraine
 
-          # Update the formula
+          # Update the formula with BuildInfo support
           cat > migraine.rb << EOL
           class Migraine < Formula
             desc "A robust CLI tool used to organize and automate complex workflows with templated commands"
@@ -164,8 +226,18 @@ jobs:
             end
 
             test do
+              # Test basic version command
               system "#{bin}/migraine", "--version"
               system "#{bin}/mgr", "--version"
+              
+              # Test BuildInfo version commands
+              assert_match version.to_s, shell_output("#{bin}/migraine version --short")
+              assert_match "Platform:", shell_output("#{bin}/migraine version")
+              
+              # Test JSON output is valid
+              json_output = shell_output("#{bin}/migraine version --json")
+              assert_match "version", json_output
+              assert_match "platform", json_output
             end
           end
           EOL
@@ -174,5 +246,39 @@ jobs:
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
           git add migraine.rb
-          git commit -m "Update migraine to ${VERSION}"
+          git commit -m "Update migraine to ${VERSION} (BuildInfo support)"
           git push
+
+  release-summary:
+    needs: [release, publish-homebrew]
+    name: Release Summary
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Release Summary
+        run: |
+          VERSION=${{ github.ref_name }}
+          echo "## 🎉 Release Summary for $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Completed Tasks:" >> $GITHUB_STEP_SUMMARY
+          echo "- Built binaries for Linux and macOS (amd64 + arm64)" >> $GITHUB_STEP_SUMMARY
+          echo "- Tested BuildInfo version extraction" >> $GITHUB_STEP_SUMMARY
+          echo "- Generated checksums" >> $GITHUB_STEP_SUMMARY
+          echo "- Created GitHub release with artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- Updated Homebrew formula" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Available Downloads:" >> $GITHUB_STEP_SUMMARY
+          echo "- **macOS**: \`brew install tesh254/migraine/migraine\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Linux/Manual**: Download from [releases page](https://github.com/tesh254/migraine/releases/tag/$VERSION)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Go install**: \`go install github.com/tesh254/migraine@$VERSION\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔍 Version Info:" >> $GITHUB_STEP_SUMMARY
+          echo "All binaries include automatic version detection via Go's BuildInfo system:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`migraine version\` - Detailed version info" >> $GITHUB_STEP_SUMMARY
+          echo "- \`migraine version --json\` - JSON format" >> $GITHUB_STEP_SUMMARY
+          echo "- \`migraine buildinfo\` - Comprehensive build details" >> $GITHUB_STEP_SUMMARY
