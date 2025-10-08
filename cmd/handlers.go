@@ -2,414 +2,139 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
-	run "github.com/tesh254/migraine/internal/execution"
-	"github.com/tesh254/migraine/internal/storage/kv"
+	"github.com/tesh254/migraine/internal/storage/sqlite"
 	"github.com/tesh254/migraine/internal/workflow"
 	"github.com/tesh254/migraine/pkg/utils"
+	execution "github.com/tesh254/migraine/internal/execution"
 )
 
-func handleNewTemplate(templatePath string) error {
-	content, err := os.ReadFile(templatePath)
-	if err != nil {
-		return fmt.Errorf("failed to read template file: %v", err)
-	}
-
-	// Extract slug from filename
-	slug := filepath.Base(templatePath)
-	slug = slug[:len(slug)-len(filepath.Ext(slug))]
-	slug = utils.FormatString(slug)
-
-	// Check if template exists
-	existing, err := kv.GetTemplateSafe(slug)
-	if err == nil && existing != nil {
-		return fmt.Errorf("template with name '%s' already exists", slug)
-	}
-
-	// Extract variables
-	variables := utils.ExtractTemplateVars(string(content))
-	if len(variables) > 0 {
-		utils.LogInfo("Template variables detected:")
-		for _, v := range variables {
-			fmt.Printf("  • %s\n", v)
-		}
-		fmt.Println()
-	}
-
-	// Create template
-	template := kv.TemplateItem{
-		Slug:     slug,
-		Workflow: string(content),
-	}
-
-	if err := kv.CreateTemplateSafe(template); err != nil {
-		return fmt.Errorf("failed to create template: %v", err)
-	}
-
-	utils.LogSuccess(fmt.Sprintf("Template '%s' created successfully", slug))
-	return nil
-}
-
-func handleListTemplates() {
-	templates, err := kv.ListTemplatesSafe()
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to list templates: %v", err))
-		return
-	}
-
-	if len(templates) == 0 {
-		fmt.Println("No templates found")
-		return
-	}
-
-	fmt.Println("\nAvailable templates:")
-	for _, t := range templates {
-		fmt.Printf("  • %s\n", t.Slug)
-	}
-}
-
-func handleDeleteTemplate(templateName string) error {
-	if err := kv.DeleteTemplateSafe(templateName); err != nil {
-		return fmt.Errorf("failed to delete template: %v", err)
-	}
-
-	utils.LogSuccess(fmt.Sprintf("Template '%s' deleted successfully", templateName))
-	return nil
-}
-
-func handleAddWorkflow() {
-	templates, err := kv.ListTemplatesSafe()
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to list templates: %v", err))
-		os.Exit(1)
-	}
-
-	if len(templates) == 0 {
-		utils.LogError(fmt.Sprintf("No template found. Fork or Create a template."))
-		os.Exit(1)
-	}
-
-	fmt.Println("\nAvailable templates:")
-	for i, t := range templates {
-		fmt.Printf("[%d] %s\n", i+1, t.Slug)
-	}
-
-	// Template selection
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf("\nEnter template number: ")
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to read input: %v", err))
-		os.Exit(1)
-	}
-
-	// Parse template selection
-	selection, err := strconv.Atoi(strings.TrimSpace(input))
-	if err != nil || selection < 1 || selection > len(templates) {
-		utils.LogError("Invalid template selection")
-		os.Exit(1)
-	}
-
-	selectedTemplate := templates[selection-1]
-
-	// Parse template into workflow to access config
-	parser := workflow.NewTemplateParser(selectedTemplate.Workflow)
-	wk, err := parser.ParseToWorkflow()
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to parse workflow template: %v", err))
-		os.Exit(1)
-	}
-
-	// Get workflow name first
-	fmt.Print("\nEnter workflow name: ")
-	workflowName, err := reader.ReadString('\n')
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to read input: %v", err))
-		os.Exit(1)
-	}
-
-	workflowName = strings.TrimSpace(workflowName)
-	if workflowName == "" {
-		utils.LogError("Workflow name cannot be empty")
-		os.Exit(1)
-	}
-
-	slugifiedName := utils.FormatString(workflowName)
-
-	// Initialize the workflow with basic information
-	kvWorkflow := kv.Workflow{
-		ID:          slugifiedName,
-		Name:        wk.Name,
-		PreChecks:   make([]kv.Atom, len(wk.PreChecks)),
-		Steps:       make([]kv.Atom, len(wk.Steps)),
-		Description: wk.Description,
-		Actions:     make(map[string]kv.Atom),
-		Config: kv.Config{
-			Variables:      wk.Config.Variables,
-			StoreVariables: wk.Config.StoreVariables,
-		},
-		UsesSudo: false,
-	}
-
-	// Handle variables based on StoreVariables config
-	if wk.Config.StoreVariables {
-		// Extract variables and get their values
-		variables := utils.ExtractTemplateVars(selectedTemplate.Workflow)
-		if len(variables) > 0 {
-			fmt.Printf("\nEnter variables:\n")
-			variableValues := make(map[string]string)
-
-			for _, v := range variables {
-				fmt.Printf("%s: ", v)
-				value, err := reader.ReadString('\n')
-				if err != nil {
-					utils.LogError(fmt.Sprintf("Failed to read input: %v", err))
-					os.Exit(1)
-				}
-
-				value = strings.TrimSpace(value)
-				if value == "" {
-					utils.LogError(fmt.Sprintf("Variable %s cannot be empty", v))
-					os.Exit(1)
-				}
-
-				// Process variable based on config rules
-				if rules, exists := wk.Config.Variables[v]; exists {
-					if rulesArray, ok := rules.([]interface{}); ok {
-						for _, rule := range rulesArray {
-							if ruleStr, ok := rule.(string); ok {
-								switch ruleStr {
-								case "slugify":
-									value = utils.FormatString(value)
-								}
-							}
-						}
-					}
-				}
-
-				variableValues[v] = value
-			}
-
-			// Process PreChecks with variables
-			for i, step := range wk.PreChecks {
-				command, err := utils.ApplyVariablesToCommand(step.Command, variableValues)
-				if err != nil {
-					utils.LogError(fmt.Sprintf("Failed to process step command: %v", err))
-					os.Exit(1)
-				}
-
-				kvWorkflow.PreChecks[i] = kv.Atom{
-					Command:     command,
-					Description: step.Description,
-				}
-			}
-
-			// Process Steps with variables
-			for i, step := range wk.Steps {
-				command, err := utils.ApplyVariablesToCommand(step.Command, variableValues)
-				if err != nil {
-					utils.LogError(fmt.Sprintf("Failed to process step command: %v", err))
-					os.Exit(1)
-				}
-
-				kvWorkflow.Steps[i] = kv.Atom{
-					Command:     command,
-					Description: step.Description,
-				}
-			}
-
-			// Process Actions with variables
-			for key, action := range wk.Actions {
-				command, err := utils.ApplyVariablesToCommand(action.Command, variableValues)
-				if err != nil {
-					utils.LogError(fmt.Sprintf("Failed to process action command: %v", err))
-					os.Exit(1)
-				}
-
-				kvWorkflow.Actions[key] = kv.Atom{
-					Command:     command,
-					Description: action.Description,
-				}
-			}
-		}
-	} else {
-		// If StoreVariables is false, copy steps and actions as is
-		for i, step := range wk.Steps {
-			kvWorkflow.Steps[i] = kv.Atom{
-				Command:     step.Command,
-				Description: step.Description,
-			}
-		}
-
-		for key, action := range wk.Actions {
-			kvWorkflow.Actions[key] = kv.Atom{
-				Command:     action.Command,
-				Description: action.Description,
-			}
-		}
-	}
-
-	// Create the workflow
-	err = kv.CreateWorkflowSafe(slugifiedName, kvWorkflow)
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to create workflow: %v", err))
-		os.Exit(1)
-	}
-
-	utils.LogSuccess(fmt.Sprintf("Workflow '%s' created successfully", slugifiedName))
-}
-
 func handleListWorkflows() {
-	workflows, err := kv.ListWorkflowsSafe()
+	// List workflows from database
+	storage := sqlite.GetStorageService()
+	dbWorkflows, err := storage.WorkflowStore().ListWorkflows()
 	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to list workflows: %v", err))
+		utils.LogError(fmt.Sprintf("Failed to list database workflows: %v", err))
 		return
 	}
 
-	if len(workflows) == 0 {
-		fmt.Println("\nNo workflows found")
-		return
+	// List workflows from current directory
+	fsWorkflows, err := workflow.DiscoverWorkflowsFromCWD()
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to discover file-based workflows: %v", err))
+		// Continue with just DB workflows
 	}
 
 	fmt.Printf("\n%sAvailable Workflows:%s\n\n", utils.BOLD, utils.RESET)
 
-	for i, workflow := range workflows {
-		// Print workflow name, ID (slug), and description
-		fmt.Printf("%d. (%s%s%s) %s\n", i+1, utils.BOLD, workflow.ID, utils.RESET, workflow.Name)
-		if workflow.Description != nil && *workflow.Description != "" {
-			fmt.Printf("   Description: %s\n", *workflow.Description)
+	// Print database workflows
+	if len(dbWorkflows) > 0 {
+		fmt.Printf("%sDatabase Workflows:%s\n", utils.BOLD, utils.RESET)
+		for i, wf := range dbWorkflows {
+			fmt.Printf("%d. (%s%s%s) %s\n", i+1, utils.BOLD, wf.ID, utils.RESET, wf.Name)
+			
+			// Parse the metadata to get more details
+			// For now, we'll just show basic info
+			fmt.Printf("   Source: Database\n")
+			fmt.Printf("   Use Vault: %t\n", wf.UseVault)
+			fmt.Println()
 		}
+	}
 
-		// Extract and display unique variables from steps and actions
-		variables := make(map[string]bool)
-
-		// Extract from steps
-		for _, step := range workflow.Steps {
-			vars := utils.ExtractTemplateVars(step.Command)
-			for _, v := range vars {
-				variables[v] = true
+	// Print file system workflows
+	if len(fsWorkflows) > 0 {
+		if len(dbWorkflows) > 0 {
+			fmt.Printf("\n%sFile-based Workflows:%s\n", utils.BOLD, utils.RESET)
+		}
+		
+		for i, wf := range fsWorkflows {
+			fmt.Printf("%d. %s\n", i+1+len(dbWorkflows), wf.Name)
+			if wf.Description != nil {
+				fmt.Printf("   Description: %s\n", *wf.Description)
 			}
-		}
-
-		// Extract from actions
-		for _, action := range workflow.Actions {
-			vars := utils.ExtractTemplateVars(action.Command)
-			for _, v := range vars {
-				variables[v] = true
+			fmt.Printf("   Source: %s\n", wf.Path)
+			fmt.Printf("   Use Vault: %t\n", wf.UseVault)
+			
+			// Show required variables
+			allContent := ""
+			for _, step := range wf.Steps {
+				allContent += step.Command + "\n"
 			}
-		}
-
-		// Display variables if any exist
-		if len(variables) > 0 {
-			fmt.Printf("   Required Variables:\n")
-			for v := range variables {
-				fmt.Printf("   • %s\n", v)
+			for _, check := range wf.PreChecks {
+				allContent += check.Command + "\n"
 			}
+			for name, action := range wf.Actions {
+				allContent += fmt.Sprintf("%s: %s\n", name, action.Command)
+			}
+			
+			variables := utils.ExtractTemplateVars(allContent)
+			if len(variables) > 0 {
+				fmt.Printf("   Required Variables: %s\n", strings.Join(variables, ", "))
+			}
+			
+			fmt.Println()
 		}
+	}
 
-		// Add a newline between workflows for better readability
-		fmt.Println()
+	if len(dbWorkflows) == 0 && len(fsWorkflows) == 0 {
+		fmt.Println("No workflows found in database or current directory")
 	}
 }
 
-func handleDeleteWorkflow(workflowId string) {
-	if err := kv.DeleteWorkflowSafe(workflowId); err != nil {
-		utils.LogError(fmt.Sprintf("failed to delete workflow: %v", err))
-	}
-
-	utils.LogSuccess(fmt.Sprintf("Workflow '%s' deleted successfully", workflowId))
-}
-
-func runPreChecks(workflow *kv.Workflow, variables map[string]string) error {
-	if len(workflow.PreChecks) == 0 {
-		return nil
-	}
-
-	fmt.Printf("\n┌─⏹ Running pre-checks for workflow: %s\n", workflow.Name)
-	for i, check := range workflow.PreChecks {
-		command, err := utils.ApplyVariablesToCommand(check.Command, variables)
-		lastCommand := i == len(workflow.PreChecks)-1
-		commandText := fmt.Sprintf("├─ %s\n", command)
-
-		if lastCommand {
-			commandText = fmt.Sprintf("└─⏹ %s\n", command)
-		}
-		if err != nil {
-			return fmt.Errorf("failed to process precheck command: %v", err)
-		}
-
-		utils.ColorSizePrint("blue", "small", fmt.Sprintf("pre_check [%d]: %s\n", i+1, *check.Description))
-		utils.ColorSizePrint("blue", "small", commandText)
-
-		if err := run.ExecuteCommand(command); err != nil {
-			utils.LogError(fmt.Sprintf("precheck failed: %v", err))
-			return fmt.Errorf("precheck failed")
-		}
-
-		fmt.Printf("%s PreCheck completed successfully %s\n\n", utils.CHECK, utils.CHECK)
-	}
-
-	return nil
-}
-
-func executeAction(workflow *kv.Workflow, actionName string, variables map[string]string) error {
-	if len(workflow.PreChecks) > 0 {
-		if err := runPreChecks(workflow, variables); err != nil {
-			return fmt.Errorf("pre-checks failed: %v", err)
-		}
-	}
-
-	action, exists := workflow.Actions[actionName]
-	if !exists {
-		return fmt.Errorf("action '%s' not found in workflow", actionName)
-	}
-
-	// Replace variables in command
-	command, err := utils.ApplyVariablesToCommand(action.Command, variables)
-	if err != nil {
-		return fmt.Errorf("failed to process action command: %v", err)
-	}
-
-	utils.ColorSizePrint("yellow", "bold", fmt.Sprintf("\n┌─⏹ Running action: %s\n", *action.Description))
-	utils.ColorSizePrint("green", "bold", fmt.Sprintf("└─⏹ %s\n", command))
-
-	if err := run.ExecuteCommand(command); err != nil {
-		return fmt.Errorf("failed to execute action: %v", err)
-	}
-
-	fmt.Printf("%s Action completed successfully %s\n", utils.CHECK, utils.CHECK)
-	return nil
-}
-
-func handleRunWorkflow(workflowId string, cmd *cobra.Command) {
-	workflow, err := kv.GetWorkflowSafe(workflowId)
-	if err != nil {
-		utils.LogError("workflow not found")
+func handleRunWorkflowV2(workflowName string, cmd *cobra.Command) {
+	// First, try to find the workflow in the database
+	storage := sqlite.GetStorageService()
+	dbWf, dbErr := storage.WorkflowStore().GetWorkflow(workflowName)
+	
+	// Also try to find the workflow in current directory
+	fsWf, fsErr := workflow.FindWorkflowByName(workflowName)
+	
+	// If neither is found, error out
+	if dbErr != nil && fsErr != nil {
+		utils.LogError(fmt.Sprintf("Workflow '%s' not found in database or current directory", workflowName))
 		os.Exit(1)
 	}
 
-	if workflow.UsesSudo {
-		if os.Getuid() != 0 {
-			utils.LogError("This workflow requires sudo privileges. Please run with sudo.")
-			os.Exit(1)
+	// If both are found, prefer the database one for now
+	var useVault bool
+	var workflowContent string
+	
+	if dbErr == nil {
+		// Use database workflow
+		useVault = dbWf.UseVault
+		// For the content, we'll convert the metadata to a string representation
+		metadataBytes, _ := json.Marshal(dbWf.Metadata)
+		workflowContent = string(metadataBytes)
+	} else {
+		// Use file-based workflow
+		useVault = fsWf.UseVault
+		// For the content, we'll build a representation of all commands
+		workflowContent = ""
+		for _, step := range fsWf.Steps {
+			workflowContent += step.Command + "\n"
+		}
+		for _, check := range fsWf.PreChecks {
+			workflowContent += check.Command + "\n"
+		}
+		for name, action := range fsWf.Actions {
+			workflowContent += fmt.Sprintf("%s: %s\n", name, action.Command)
 		}
 	}
 
 	// Process variables from flags
-	variables := make(map[string]string)
-	varFlags, err := cmd.Flags().GetStringArray("var")
+	flagVars, err := cmd.Flags().GetStringArray("var")
 	if err != nil {
 		utils.LogError(fmt.Sprintf("Failed to get variables: %v", err))
 		os.Exit(1)
 	}
 
-	for _, v := range varFlags {
+	variables := make(map[string]string)
+	for _, v := range flagVars {
 		parts := strings.SplitN(v, "=", 2)
 		if len(parts) != 2 {
 			utils.LogError(fmt.Sprintf("Invalid variable format: %s. Use KEY=VALUE format", v))
@@ -418,51 +143,232 @@ func handleRunWorkflow(workflowId string, cmd *cobra.Command) {
 		variables[parts[0]] = parts[1]
 	}
 
-	// Process remaining variables if store_variables is true
-	if workflow.Config.StoreVariables {
+	// Create variable resolver
+	varResolver := workflow.NewVariableResolver(storage)
+	
+	// Determine workflow ID based on which workflow type we're using
+	var workflowID string
+	if dbErr == nil {
+		workflowID = dbWf.ID
+	} else {
+		workflowID = workflowName
+	}
+
+	// Resolve variables based on workflow configuration
+	resolvedVars, err := varResolver.ResolveVariables(workflowID, useVault, variables)
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to resolve variables: %v", err))
+		os.Exit(1)
+	}
+
+	// If there are still missing variables, prompt for them if not using vault
+	if !useVault {
 		reader := bufio.NewReader(os.Stdin)
-		requiredVars := make(map[string]bool)
-
-		// Collect variables from all sources
-		for _, check := range workflow.PreChecks {
-			vars := utils.ExtractTemplateVars(check.Command)
-			for _, v := range vars {
-				requiredVars[v] = true
-			}
-		}
-		for _, step := range workflow.Steps {
-			vars := utils.ExtractTemplateVars(step.Command)
-			for _, v := range vars {
-				requiredVars[v] = true
-			}
-		}
-		for _, action := range workflow.Actions {
-			vars := utils.ExtractTemplateVars(action.Command)
-			for _, v := range vars {
-				requiredVars[v] = true
-			}
-		}
-
-		// Prompt for missing variables
-		for v := range requiredVars {
-			if _, exists := variables[v]; !exists {
+		
+		// Get all required variables from the workflow content
+		requiredVars := utils.ExtractTemplateVars(workflowContent)
+		
+		for _, v := range requiredVars {
+			if _, exists := resolvedVars[v]; !exists {
 				fmt.Printf("%s: ", v)
 				value, err := reader.ReadString('\n')
 				if err != nil {
 					utils.LogError(fmt.Sprintf("Failed to read input: %v", err))
 					os.Exit(1)
 				}
-				variables[v] = strings.TrimSpace(value)
+				resolvedVars[v] = strings.TrimSpace(value)
 			}
 		}
 	}
 
+	// Execute the workflow based on its source
+	if dbErr == nil {
+		executeDBWorkflow(dbWf, resolvedVars)
+	} else {
+		executeYAMLWorkflow(fsWf, resolvedVars)
+	}
+}
+
+func executeDBWorkflow(dbWf *sqlite.Workflow, variables map[string]string) {
+	fmt.Printf("Executing database workflow: %s\n", dbWf.Name)
+	
+	// Parse metadata to get the workflow content
+	metadataBytes, err := json.Marshal(dbWf.Metadata)
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to marshal workflow metadata: %v", err))
+		os.Exit(1)
+	}
+	
+	// Convert the metadata back to a ProjectConfig (or similar structure)
+	var config workflow.ProjectConfig
+	if err := json.Unmarshal(metadataBytes, &config); err != nil {
+		utils.LogError(fmt.Sprintf("Failed to unmarshal workflow metadata: %v", err))
+		os.Exit(1)
+	}
+	
+	// Create variable resolver for applying variables
+	varResolver := workflow.NewVariableResolver(sqlite.GetStorageService())
+	
+	// Run pre-checks from the metadata
+	for i, check := range config.PreChecks {
+		command, err := varResolver.ApplyVariables(check.Command, variables)
+		if err != nil {
+			utils.LogError(fmt.Sprintf("Failed to apply variables to pre-check %d: %v", i+1, err))
+			os.Exit(1)
+		}
+		
+		if check.Description != nil {
+			fmt.Printf("Running pre-check %d: %s\n", i+1, *check.Description)
+		} else {
+			fmt.Printf("Running pre-check %d\n", i+1)
+		}
+		fmt.Printf("Command: %s\n", command)
+		
+		// Execute the command using the execution package
+		if err := execution.ExecuteCommand(command); err != nil {
+			utils.LogError(fmt.Sprintf("Pre-check %d failed: %v", i+1, err))
+			os.Exit(1)
+		}
+		utils.LogInfo("Pre-check completed successfully")
+	}
+	
+	// Run steps from the metadata
+	for i, step := range config.Steps {
+		command, err := varResolver.ApplyVariables(step.Command, variables)
+		if err != nil {
+			utils.LogError(fmt.Sprintf("Failed to apply variables to step %d: %v", i+1, err))
+			os.Exit(1)
+		}
+		
+		if step.Description != nil {
+			fmt.Printf("Running step %d: %s\n", i+1, *step.Description)
+		} else {
+			fmt.Printf("Running step %d\n", i+1)
+		}
+		fmt.Printf("Command: %s\n", command)
+		
+		// Execute the command using the execution package
+		if err := execution.ExecuteCommand(command); err != nil {
+			utils.LogError(fmt.Sprintf("Step %d failed: %v", i+1, err))
+			os.Exit(1)
+		}
+		utils.LogInfo("Step completed successfully")
+	}
+	
+	utils.LogSuccess(fmt.Sprintf("Database workflow '%s' completed successfully", dbWf.Name))
+}
+
+func executeYAMLWorkflow(yamlWf *workflow.YAMLWorkflow, variables map[string]string) {
+	fmt.Printf("Executing YAML workflow: %s\n", yamlWf.Name)
+	
+	// Create variable resolver for applying variables
+	varResolver := workflow.NewVariableResolver(sqlite.GetStorageService())
+	
 	// Run pre-checks
-	if err := runPreChecks(workflow, variables); err != nil {
+	for i, check := range yamlWf.PreChecks {
+		command, err := varResolver.ApplyVariables(check.Command, variables)
+		if err != nil {
+			utils.LogError(fmt.Sprintf("Failed to apply variables to pre-check %d: %v", i+1, err))
+			os.Exit(1)
+		}
+		
+		fmt.Printf("Running pre-check %d: %s\n", i+1, *check.Description)
+		fmt.Printf("Command: %s\n", command)
+		
+		// Execute the command using the execution package
+		if err := execution.ExecuteCommand(command); err != nil {
+			utils.LogError(fmt.Sprintf("Pre-check %d failed: %v", i+1, err))
+			os.Exit(1)
+		}
+		utils.LogInfo("Pre-check completed successfully")
+	}
+	
+	// Run steps
+	for i, step := range yamlWf.Steps {
+		command, err := varResolver.ApplyVariables(step.Command, variables)
+		if err != nil {
+			utils.LogError(fmt.Sprintf("Failed to apply variables to step %d: %v", i+1, err))
+			os.Exit(1)
+		}
+		
+		fmt.Printf("Running step %d: %s\n", i+1, *step.Description)
+		fmt.Printf("Command: %s\n", command)
+		
+		// Execute the command using the execution package
+		if err := execution.ExecuteCommand(command); err != nil {
+			utils.LogError(fmt.Sprintf("Step %d failed: %v", i+1, err))
+			os.Exit(1)
+		}
+		utils.LogInfo("Step completed successfully")
+	}
+	
+	utils.LogSuccess(fmt.Sprintf("YAML workflow '%s' completed successfully", yamlWf.Name))
+}
+
+func handleRunProjectWorkflow(cmd *cobra.Command) {
+	// Look for migraine.yml or migraine.json in current directory
+	projWf, err := workflow.LoadProjectWorkflow()
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to load project workflow: %v", err))
+		utils.LogInfo("Create a 'migraine.yml' or 'migraine.json' file in your current directory to use this feature")
+		os.Exit(1)
+	}
+	
+	// Validate workflow name
+	if err := workflow.ValidateWorkflowName(projWf.Name); err != nil {
+		utils.LogError(fmt.Sprintf("Invalid workflow name: %v", err))
+		os.Exit(1)
+	}
+	
+	// Get storage service
+	storage := sqlite.GetStorageService()
+	
+	// Upsert the workflow to the database
+	if err := workflow.UpsertProjectWorkflowToDB(projWf, storage); err != nil {
+		utils.LogError(fmt.Sprintf("Failed to upsert project workflow to database: %v", err))
+		os.Exit(1)
+	}
+	
+	utils.LogInfo(fmt.Sprintf("Project workflow '%s' loaded and upserted to database", projWf.Name))
+	
+	// Process variables from flags
+	flagVars, err := cmd.Flags().GetStringArray("var")
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to get variables: %v", err))
 		os.Exit(1)
 	}
 
-	// Check if we're running specific actions
+	variables := make(map[string]string)
+	for _, v := range flagVars {
+		parts := strings.SplitN(v, "=", 2)
+		if len(parts) != 2 {
+			utils.LogError(fmt.Sprintf("Invalid variable format: %s. Use KEY=VALUE format", v))
+			os.Exit(1)
+		}
+		variables[parts[0]] = parts[1]
+	}
+
+	// Create variable resolver
+	varResolver := workflow.NewVariableResolver(storage)
+	
+	// Resolve variables based on workflow configuration
+	resolvedVars, err := varResolver.ResolveVariables(projWf.Name, projWf.UseVault, variables)
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to resolve variables: %v", err))
+		os.Exit(1)
+	}
+
+	// Execute the project workflow
+	executeProjectYAMLWorkflow(projWf, resolvedVars, cmd)
+}
+
+func executeProjectYAMLWorkflow(yamlWf *workflow.YAMLWorkflow, variables map[string]string, cmd *cobra.Command) {
+	fmt.Printf("Executing project workflow: %s\n", yamlWf.Name)
+	
+	// Create variable resolver for applying variables
+	varResolver := workflow.NewVariableResolver(sqlite.GetStorageService())
+	
+	// Check if specific action is requested
 	actionFlags, err := cmd.Flags().GetStringArray("action")
 	if err != nil {
 		utils.LogError(fmt.Sprintf("Failed to get action flags: %v", err))
@@ -470,187 +376,151 @@ func handleRunWorkflow(workflowId string, cmd *cobra.Command) {
 	}
 
 	if len(actionFlags) > 0 {
-		// Execute specified actions
+		// Run specific action instead of main steps
 		for _, actionName := range actionFlags {
-			if err := executeAction(workflow, actionName, variables); err != nil {
-				utils.LogError(fmt.Sprintf("Failed to execute action '%s': %v", actionName, err))
+			if action, exists := yamlWf.Actions[actionName]; exists {
+				command, err := varResolver.ApplyVariables(action.Command, variables)
+				if err != nil {
+					utils.LogError(fmt.Sprintf("Failed to apply variables to action %s: %v", actionName, err))
+					os.Exit(1)
+				}
+				
+				fmt.Printf("Running action '%s': %s\n", actionName, *action.Description)
+				fmt.Printf("Command: %s\n", command)
+				
+				// Execute the command using the execution package
+				if err := execution.ExecuteCommand(command); err != nil {
+					utils.LogError(fmt.Sprintf("Action '%s' failed: %v", actionName, err))
+					os.Exit(1)
+				}
+				utils.LogInfo("Action completed successfully")
+			} else {
+				utils.LogError(fmt.Sprintf("Action '%s' not found in workflow", actionName))
 				os.Exit(1)
 			}
 		}
-		utils.LogSuccess(fmt.Sprintf("Workflow actions completed successfully"))
+		utils.LogSuccess(fmt.Sprintf("Project workflow actions completed successfully"))
 		return
 	}
-
-	// Run all steps
-	utils.ColorSizePrint("yellow", "bold", fmt.Sprintf("\n┌─⏹ Executing workflow steps: %s\n", workflow.Name))
-	for i, step := range workflow.Steps {
-		command, err := utils.ApplyVariablesToCommand(step.Command, variables)
-		lastCommand := i == len(workflow.Steps)-1
+	
+	// Run pre-checks
+	for i, check := range yamlWf.PreChecks {
+		command, err := varResolver.ApplyVariables(check.Command, variables)
 		if err != nil {
-			utils.LogError(fmt.Sprintf("Failed to process step command: %v", err))
+			utils.LogError(fmt.Sprintf("Failed to apply variables to pre-check %d: %v", i+1, err))
 			os.Exit(1)
 		}
-
-		commandText := fmt.Sprintf("├─ %s\n", command)
-
-		if lastCommand {
-			commandText = fmt.Sprintf("└─⏹ %s\n\n", command)
-		}
-
-		utils.ColorSizePrint("yellow", "bold", fmt.Sprintf("├─[%d] %s\n", i+1, *step.Description))
-		utils.ColorSizePrint("green", "bold", commandText)
-
-		if err := run.ExecuteCommand(command); err != nil {
-			utils.LogError(fmt.Sprintf("Failed to execute step %d: %v", i+1, err))
+		
+		fmt.Printf("Running pre-check %d: %s\n", i+1, *check.Description)
+		fmt.Printf("Command: %s\n", command)
+		
+		// Execute the command using the execution package
+		if err := execution.ExecuteCommand(command); err != nil {
+			utils.LogError(fmt.Sprintf("Pre-check %d failed: %v", i+1, err))
 			os.Exit(1)
 		}
+		utils.LogInfo("Pre-check completed successfully")
 	}
-	utils.LogSuccess(fmt.Sprintf("Workflow '%s' completed successfully", workflow.Name))
-}
-
-func handleLoadRemoteTemplate(url string) error {
-	content, err := utils.DownloadTemplate(url)
-	if err != nil {
-		return fmt.Errorf("failed to download template: %v", err)
-	}
-
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("\nEnter template name: ")
-	templateName, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read template name: %v", err)
-	}
-
-	templateName = strings.TrimSpace(templateName)
-	if templateName == "" {
-		return fmt.Errorf("template name cannot be empty")
-	}
-
-	slug := utils.FormatString(templateName)
-
-	existing, err := kv.GetTemplateSafe(slug)
-	if err == nil && existing != nil {
-		return fmt.Errorf("template with name '%s' already exists", slug)
-	}
-
-	variables := utils.ExtractTemplateVars(string(content))
-	if len(variables) > 0 {
-		utils.LogInfo("Template variables detected:")
-		for _, v := range variables {
-			fmt.Printf("  • %s\n", v)
+	
+	// Run steps
+	for i, step := range yamlWf.Steps {
+		command, err := varResolver.ApplyVariables(step.Command, variables)
+		if err != nil {
+			utils.LogError(fmt.Sprintf("Failed to apply variables to step %d: %v", i+1, err))
+			os.Exit(1)
 		}
-		fmt.Println()
+		
+		fmt.Printf("Running step %d: %s\n", i+1, *step.Description)
+		fmt.Printf("Command: %s\n", command)
+		
+		// Execute the command using the execution package
+		if err := execution.ExecuteCommand(command); err != nil {
+			utils.LogError(fmt.Sprintf("Step %d failed: %v", i+1, err))
+			os.Exit(1)
+		}
+		utils.LogInfo("Step completed successfully")
 	}
-
-	template := kv.TemplateItem{
-		Slug:     slug,
-		Workflow: string(content),
-	}
-
-	if err := kv.CreateTemplateSafe(template); err != nil {
-		return fmt.Errorf("failed to create template: %v", err)
-	}
-
-	utils.LogSuccess(fmt.Sprintf("Template '%s' created successfully", slug))
-	return nil
+	
+	utils.LogSuccess(fmt.Sprintf("Project workflow '%s' completed successfully", yamlWf.Name))
 }
 
-func handleWorkflowInfo(workflowId string) {
-	workflow, err := kv.GetWorkflowSafe(workflowId)
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to get workflow: %v", err))
+func handleWorkflowInfoV2(workflowName string) {
+	// Try to find the workflow in database first
+	storage := sqlite.GetStorageService()
+	dbWf, dbErr := storage.WorkflowStore().GetWorkflow(workflowName)
+	
+	// Also try to find in file system
+	fsWf, fsErr := workflow.FindWorkflowByName(workflowName)
+	
+	// If neither is found, error out
+	if dbErr != nil && fsErr != nil {
+		utils.LogError(fmt.Sprintf("Workflow '%s' not found in database or current directory", workflowName))
 		os.Exit(1)
 	}
-
-	// Print workflow header
-	fmt.Printf("\n%s%s%s (%s)\n", utils.BOLD, workflow.Name, utils.RESET, workflowId)
-	if workflow.Description != nil && *workflow.Description != "" {
-		utils.ColorPrint("gray", fmt.Sprintf("%s\n", *workflow.Description))
-	}
-
-	fmt.Println(workflow.PreChecks, ">>>>>")
-
-	// Print Pre-checks
-	if len(workflow.PreChecks) > 0 {
-		fmt.Printf("\n%s┌─⏹ pre-checks:%s\n", utils.BOLD, utils.RESET)
-		for i, check := range workflow.PreChecks {
-			if check.Description != nil {
-				fmt.Printf("├─ %s", *check.Description)
+	
+	fmt.Printf("\n%s%s%s\n", utils.BOLD, workflowName, utils.RESET)
+	
+	if dbErr == nil {
+		// Show database workflow info
+		fmt.Printf("Source: Database\n")
+		fmt.Printf("Use Vault: %t\n", dbWf.UseVault)
+		fmt.Printf("Path: %s\n", dbWf.Path)
+		
+		// Parse metadata to show more details
+		// For now, just show the raw metadata
+		fmt.Printf("Metadata: %s\n", dbWf.Metadata)
+		utils.LogInfo("Database workflow details would be shown here")
+	} else {
+		// Show file-based workflow info
+		fmt.Printf("Source: %s\n", fsWf.Path)
+		fmt.Printf("Use Vault: %t\n", fsWf.UseVault)
+		
+		if fsWf.Description != nil {
+			fmt.Printf("Description: %s\n", *fsWf.Description)
+		}
+		
+		// Show pre-checks
+		if len(fsWf.PreChecks) > 0 {
+			fmt.Printf("\nPre-checks:\n")
+			for i, check := range fsWf.PreChecks {
+				fmt.Printf("  %d. %s\n", i+1, *check.Description)
+				fmt.Printf("     Command: %s\n", check.Command)
 			}
-			isLastCommand := i == len(workflow.PreChecks)-1
-
-			text := fmt.Sprintf("├─ %s\n", check.Command)
-
-			if isLastCommand {
-				text = fmt.Sprintf("└─⏹ %s\n", check.Command)
+		}
+		
+		// Show steps
+		if len(fsWf.Steps) > 0 {
+			fmt.Printf("\nSteps:\n")
+			for i, step := range fsWf.Steps {
+				fmt.Printf("  %d. %s\n", i+1, *step.Description)
+				fmt.Printf("     Command: %s\n", step.Command)
 			}
-			utils.ColorSizePrint("green", "small", text)
 		}
-	}
-
-	// Print Steps
-	if len(workflow.Steps) > 0 {
-		fmt.Printf("\n%s┌─⏹ steps%s\n", utils.BOLD, utils.RESET)
-		utils.ColorSizePrint("gray", "small", fmt.Sprintf("├─ mgr run %s\n\n", workflowId))
-		for i, step := range workflow.Steps {
-			if step.Description != nil {
-				fmt.Printf("├─ %s\n", *step.Description)
+		
+		// Show actions
+		if len(fsWf.Actions) > 0 {
+			fmt.Printf("\nActions:\n")
+			for name, action := range fsWf.Actions {
+				fmt.Printf("  %s: %s\n", name, *action.Description)
+				fmt.Printf("     Command: %s\n", action.Command)
 			}
-			isLastCommand := i == len(workflow.Steps)-1
-
-			text := fmt.Sprintf("├─ %s\n", step.Command)
-
-			if isLastCommand {
-				text = fmt.Sprintf("└─⏹ %s\n", step.Command)
-			}
-			utils.ColorSizePrint("green", "small", text)
+		}
+		
+		// Show variables
+		allContent := ""
+		for _, step := range fsWf.Steps {
+			allContent += step.Command + "\n"
+		}
+		for _, check := range fsWf.PreChecks {
+			allContent += check.Command + "\n"
+		}
+		for name, action := range fsWf.Actions {
+			allContent += fmt.Sprintf("%s: %s\n", name, action.Command)
+		}
+		
+		variables := utils.ExtractTemplateVars(allContent)
+		if len(variables) > 0 {
+			fmt.Printf("\nRequired Variables: %s\n", strings.Join(variables, ", "))
 		}
 	}
-
-	// Print Actions
-	if len(workflow.Actions) > 0 {
-		fmt.Printf("\n%sactions:%s\n", utils.BOLD, utils.RESET)
-		for name, action := range workflow.Actions {
-			fmt.Printf("%s┌─⏹ %s%s\n", utils.BOLD, name, utils.RESET)
-			if action.Description != nil {
-				fmt.Printf("├─ %s\n", *action.Description)
-			}
-			utils.ColorSizePrint("green", "small", fmt.Sprintf("├─ %s\n", action.Command))
-			utils.ColorSizePrint("gray", "bold", fmt.Sprintf("└─⏹ mgr run %s -a %s\n", workflowId, name))
-		}
-	}
-
-	// Print Variables
-	vars := make(map[string]bool)
-
-	// Extract variables from pre-checks
-	for _, check := range workflow.PreChecks {
-		for _, v := range utils.ExtractTemplateVars(check.Command) {
-			vars[v] = true
-		}
-	}
-
-	// Extract from steps
-	for _, step := range workflow.Steps {
-		for _, v := range utils.ExtractTemplateVars(step.Command) {
-			vars[v] = true
-		}
-	}
-
-	// Extract from actions
-	for _, action := range workflow.Actions {
-		for _, v := range utils.ExtractTemplateVars(action.Command) {
-			vars[v] = true
-		}
-	}
-
-	if len(vars) > 0 {
-		fmt.Printf("\n%sRequired Variables:%s\n", utils.BOLD, utils.RESET)
-		for v := range vars {
-			fmt.Printf("  • %s\n", v)
-			utils.ColorSizePrint("gray", "small", fmt.Sprintf("    Set with: -v %s=value\n", v))
-		}
-	}
-
-	fmt.Println()
 }

@@ -2,11 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-### Added
+## [v2.0.0] - 2025-01-08
 
+### Added
+- **Complete storage migration from Badger to SQLite** - All data now stored in normalized SQLite tables
+- **YAML workflow support** - Workflows can now be defined as YAML files with comments and structured format
+- **Vaulted variables system** - Secure variable storage with scope awareness (global, project, workflow)
+- **Enhanced CLI commands**:
+  - `workflow init [name]` - Scaffold new YAML workflows with commented sections
+  - `workflow validate [path]` - Validate workflow files
+  - `workflow run [name]` - Execute workflows with variable resolution
+  - `vars set/get/list/delete` - Manage vault variables with scope flags
+- **Workflow discovery from current directory** - Automatically find YAML workflows in ./workflows/
+- **Migration utilities** - Automatic migration of existing Badger data to SQLite
+
+### Changed
+- **Breaking**: Storage system changed from Badger to SQLite
+- **Breaking**: Workflow structure updated to support YAML format and vault variables
+- **Enhanced**: Variable resolution now supports vault fallback with scope precedence
+- **Improved**: CLI command structure with clearer subcommands
+
+### Deprecated
+- Legacy JSON template system (still supported for migration)
+
+### Removed
+- BadgerDB dependency
+
+### Fixed
+- Improved error handling for variable resolution
+- Better workflow execution with proper variable substitution
+
+## [v1.0.6] - 2025-06-19
+
+### Added
 - `v1.0.6` [2025-06-19] introduce fang usage
 - `v1.0.5` [2025-04-30] ensure store exists before read operations
 - `v1.0.4` [2025-04-30] ensure store exists before read operations
