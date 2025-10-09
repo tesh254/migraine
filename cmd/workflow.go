@@ -27,24 +27,24 @@ Use with a name to create a regular workflow in the workflows/ directory.`,
 		if len(args) > 0 {
 			name = args[0]
 		}
-		
+
 		// Check if --yml or --json flags are used
 		generateYML, _ := cmd.Flags().GetBool("yml")
 		generateJSON, _ := cmd.Flags().GetBool("json")
-		
+
 		if generateYML || generateJSON {
 			// Generate project configuration file
 			format := "yaml"
 			if generateJSON {
 				format = "json"
 			}
-			
+
 			// Get description from flag or use default
 			description, _ := cmd.Flags().GetString("description")
 			if description == "" {
 				description = "Project-level workflow configuration"
 			}
-			
+
 			return workflow.ScaffoldProjectConfig(format, description)
 		} else if name == "" {
 			// No name provided and no format flags, generate default YAML config
@@ -59,7 +59,7 @@ Use with a name to create a regular workflow in the workflows/ directory.`,
 			if description == "" {
 				description = name
 			}
-			
+
 			return workflow.ScaffoldYAMLWorkflow(name, description)
 		}
 	},
@@ -84,12 +84,12 @@ var workflowValidateCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to load workflow: %v", err)
 		}
-		
+
 		// Basic validation
 		if workflow.Name == "" {
 			return fmt.Errorf("workflow name is required")
 		}
-		
+
 		fmt.Printf("✓ Workflow '%s' is valid\n", workflow.Name)
 		return nil
 	},
@@ -98,7 +98,7 @@ var workflowValidateCmd = &cobra.Command{
 var workflowRunCmd = &cobra.Command{
 	Use:   "run [name]",
 	Short: "Run a workflow (new command for v2)",
-	Args:  cobra.MaximumNArgs(1),  // Allow zero args to run project config
+	Args:  cobra.MaximumNArgs(1), // Allow zero args to run project config
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
 			// No workflow name provided, look for migraine.yml/migraine.json in current directory
@@ -142,24 +142,24 @@ Use with a name to create a regular workflow in the workflows/ directory.`,
 		if len(args) > 0 {
 			name = args[0]
 		}
-		
+
 		// Check if --yml or --json flags are used
 		generateYML, _ := cmd.Flags().GetBool("yml")
 		generateJSON, _ := cmd.Flags().GetBool("json")
-		
+
 		if generateYML || generateJSON {
 			// Generate project configuration file
 			format := "yaml"
 			if generateJSON {
 				format = "json"
 			}
-			
+
 			// Get description from flag or use default
 			description, _ := cmd.Flags().GetString("description")
 			if description == "" {
 				description = "Project-level workflow configuration"
 			}
-			
+
 			return workflow.ScaffoldProjectConfig(format, description)
 		} else if name == "" {
 			// No name provided and no format flags, generate default YAML config
@@ -174,7 +174,7 @@ Use with a name to create a regular workflow in the workflows/ directory.`,
 			if description == "" {
 				description = name
 			}
-			
+
 			return workflow.ScaffoldYAMLWorkflow(name, description)
 		}
 	},
@@ -185,9 +185,9 @@ func init() {
 	initCmd.Flags().StringP("description", "d", "", "Description for the workflow")
 	initCmd.Flags().Bool("yml", false, "Generate project configuration file as migraine.yml")
 	initCmd.Flags().Bool("json", false, "Generate project configuration file as migraine.json")
-	
+
 	// Add commands
-	rootCmd.AddCommand(initCmd)  // Add top-level init command
+	rootCmd.AddCommand(initCmd) // Add top-level init command
 	rootCmd.AddCommand(workflowCmd)
 	workflowCmd.AddCommand(workflowInitCmd)
 	workflowCmd.AddCommand(workflowListCmd)

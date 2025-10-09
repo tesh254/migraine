@@ -18,12 +18,12 @@ func GetStorageService() *StorageService {
 		if err != nil {
 			panic(err)
 		}
-		
+
 		storageService, err := NewStorageService(dbService)
 		if err != nil {
 			panic(err)
 		}
-		
+
 		globalService = storageService
 	})
 	return globalService

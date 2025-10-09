@@ -19,17 +19,17 @@ func (rs *RunStore) CreateRun(run Run) error {
 		INSERT INTO runs (workflow_id, status, started_at, completed_at, logs)
 		VALUES (?, ?, ?, ?, ?)
 	`
-	
+
 	var completedAt *time.Time
 	if run.CompletedAt != nil {
 		completedAt = run.CompletedAt
 	}
-	
+
 	var logs *string
 	if run.Logs != nil {
 		logs = run.Logs
 	}
-	
+
 	_, err := rs.dbService.db.Exec(
 		query,
 		run.WorkflowID,
@@ -47,11 +47,11 @@ func (rs *RunStore) CreateRun(run Run) error {
 
 func (rs *RunStore) GetRun(id int64) (*Run, error) {
 	query := `SELECT id, workflow_id, status, started_at, completed_at, logs FROM runs WHERE id = ?`
-	
+
 	var run Run
 	var completedAt *time.Time
 	var logs *string
-	
+
 	err := rs.dbService.db.QueryRow(query, id).Scan(
 		&run.ID,
 		&run.WorkflowID,
@@ -79,17 +79,17 @@ func (rs *RunStore) UpdateRun(run Run) error {
 		SET status = ?, completed_at = ?, logs = ?
 		WHERE id = ?
 	`
-	
+
 	var completedAt *time.Time
 	if run.CompletedAt != nil {
 		completedAt = run.CompletedAt
 	}
-	
+
 	var logs *string
 	if run.Logs != nil {
 		logs = run.Logs
 	}
-	
+
 	_, err := rs.dbService.db.Exec(
 		query,
 		run.Status,
@@ -106,7 +106,7 @@ func (rs *RunStore) UpdateRun(run Run) error {
 
 func (rs *RunStore) ListRuns(workflowID string) ([]Run, error) {
 	query := `SELECT id, workflow_id, status, started_at, completed_at, logs FROM runs WHERE workflow_id = ? ORDER BY started_at DESC`
-	
+
 	rows, err := rs.dbService.db.Query(query, workflowID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list runs: %v", err)
@@ -118,7 +118,7 @@ func (rs *RunStore) ListRuns(workflowID string) ([]Run, error) {
 		var run Run
 		var completedAt *time.Time
 		var logs *string
-		
+
 		err := rows.Scan(
 			&run.ID,
 			&run.WorkflowID,
@@ -141,7 +141,7 @@ func (rs *RunStore) ListRuns(workflowID string) ([]Run, error) {
 
 func (rs *RunStore) ListRecentRuns(limit int) ([]Run, error) {
 	query := `SELECT id, workflow_id, status, started_at, completed_at, logs FROM runs ORDER BY started_at DESC LIMIT ?`
-	
+
 	rows, err := rs.dbService.db.Query(query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list recent runs: %v", err)
@@ -153,7 +153,7 @@ func (rs *RunStore) ListRecentRuns(limit int) ([]Run, error) {
 		var run Run
 		var completedAt *time.Time
 		var logs *string
-		
+
 		err := rows.Scan(
 			&run.ID,
 			&run.WorkflowID,
@@ -176,7 +176,7 @@ func (rs *RunStore) ListRecentRuns(limit int) ([]Run, error) {
 
 func (rs *RunStore) DeleteRun(id int64) error {
 	query := `DELETE FROM runs WHERE id = ?`
-	
+
 	result, err := rs.dbService.db.Exec(query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete run: %v", err)

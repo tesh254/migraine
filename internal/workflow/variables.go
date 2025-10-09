@@ -45,7 +45,7 @@ func (vr *VariableResolver) ResolveVariables(workflowID string, workflowUseVault
 	} else {
 		// If not using vault, fall back to environment files or prompting
 		envVars := vr.loadEnvFileVariables(workflowID)
-		
+
 		// Merge env variables, but command-line flags and vault take precedence
 		for k, v := range envVars {
 			if _, exists := variables[k]; !exists {
@@ -60,7 +60,7 @@ func (vr *VariableResolver) ResolveVariables(workflowID string, workflowUseVault
 // loadEnvFileVariables loads variables from environment files
 func (vr *VariableResolver) loadEnvFileVariables(workflowID string) map[string]string {
 	variables := make(map[string]string)
-	
+
 	// Look for environment files in multiple locations
 	possiblePaths := []string{
 		fmt.Sprintf("./env/%s.env", workflowID),
@@ -68,7 +68,7 @@ func (vr *VariableResolver) loadEnvFileVariables(workflowID string) map[string]s
 		"./env/.env",
 		fmt.Sprintf("./%s.env", workflowID),
 	}
-	
+
 	for _, path := range possiblePaths {
 		if _, err := os.Stat(path); err == nil {
 			// File exists, load it
@@ -80,19 +80,19 @@ func (vr *VariableResolver) loadEnvFileVariables(workflowID string) map[string]s
 			break
 		}
 	}
-	
+
 	return variables
 }
 
 // loadEnvFile loads variables from a single .env file
 func (vr *VariableResolver) loadEnvFile(path string) map[string]string {
 	variables := make(map[string]string)
-	
+
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return variables
 	}
-	
+
 	lines := strings.Split(string(content), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -100,19 +100,19 @@ func (vr *VariableResolver) loadEnvFile(path string) map[string]string {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		
+
 		parts := strings.SplitN(line, "=", 2)
 		if len(parts) == 2 {
 			key := strings.TrimSpace(parts[0])
 			value := strings.TrimSpace(parts[1])
-			
+
 			// Remove quotes if present
 			value = strings.Trim(value, "\"'")
-			
+
 			variables[key] = value
 		}
 	}
-	
+
 	return variables
 }
 
@@ -120,18 +120,18 @@ func (vr *VariableResolver) loadEnvFile(path string) map[string]string {
 func (vr *VariableResolver) ValidateRequiredVariables(content string, variables map[string]string) error {
 	// Extract variables from the content
 	requiredVars := utils.ExtractTemplateVars(content)
-	
+
 	var missingVars []string
 	for _, v := range requiredVars {
 		if _, exists := variables[v]; !exists {
 			missingVars = append(missingVars, v)
 		}
 	}
-	
+
 	if len(missingVars) > 0 {
 		return fmt.Errorf("missing required variables: %s", strings.Join(missingVars, ", "))
 	}
-	
+
 	return nil
 }
 
@@ -141,13 +141,13 @@ func (vr *VariableResolver) ApplyVariables(content string, variables map[string]
 	if err := vr.ValidateRequiredVariables(content, variables); err != nil {
 		return "", err
 	}
-	
+
 	// Apply variables to the content
 	result := content
 	for k, v := range variables {
 		placeholder := fmt.Sprintf("{{%s}}", k)
 		result = strings.ReplaceAll(result, placeholder, v)
 	}
-	
+
 	return result, nil
 }

@@ -20,7 +20,7 @@ func (ws *WorkflowStore) CreateWorkflow(workflow Workflow) error {
 		INSERT INTO workflows (id, name, path, use_vault, metadata, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
-	
+
 	metadataBytes, err := json.Marshal(workflow.Metadata)
 	if err != nil {
 		return fmt.Errorf("failed to marshal workflow metadata: %v", err)
@@ -45,10 +45,10 @@ func (ws *WorkflowStore) CreateWorkflow(workflow Workflow) error {
 
 func (ws *WorkflowStore) GetWorkflow(id string) (*Workflow, error) {
 	query := `SELECT id, name, path, use_vault, metadata, created_at, updated_at FROM workflows WHERE id = ?`
-	
+
 	var workflow Workflow
 	var metadataBytes string
-	
+
 	err := ws.dbService.db.QueryRow(query, id).Scan(
 		&workflow.ID,
 		&workflow.Name,
@@ -81,7 +81,7 @@ func (ws *WorkflowStore) UpdateWorkflow(workflow Workflow) error {
 		SET name = ?, path = ?, use_vault = ?, metadata = ?, updated_at = ?
 		WHERE id = ?
 	`
-	
+
 	metadataBytes, err := json.Marshal(workflow.Metadata)
 	if err != nil {
 		return fmt.Errorf("failed to marshal workflow metadata: %v", err)
@@ -105,7 +105,7 @@ func (ws *WorkflowStore) UpdateWorkflow(workflow Workflow) error {
 
 func (ws *WorkflowStore) DeleteWorkflow(id string) error {
 	query := `DELETE FROM workflows WHERE id = ?`
-	
+
 	result, err := ws.dbService.db.Exec(query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete workflow: %v", err)
@@ -125,7 +125,7 @@ func (ws *WorkflowStore) DeleteWorkflow(id string) error {
 
 func (ws *WorkflowStore) ListWorkflows() ([]Workflow, error) {
 	query := `SELECT id, name, path, use_vault, metadata, created_at, updated_at FROM workflows ORDER BY name`
-	
+
 	rows, err := ws.dbService.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list workflows: %v", err)
@@ -136,7 +136,7 @@ func (ws *WorkflowStore) ListWorkflows() ([]Workflow, error) {
 	for rows.Next() {
 		var workflow Workflow
 		var metadataBytes string
-		
+
 		err := rows.Scan(
 			&workflow.ID,
 			&workflow.Name,

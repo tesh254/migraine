@@ -51,10 +51,10 @@ func (ms *MigrationService) openBadgerDB() (*badger.DB, error) {
 
 	// Path to the old Badger database
 	dbPath := filepath.Join(homeDir, ".migraine_db")
-	
+
 	opts := badger.DefaultOptions(dbPath)
 	opts.ReadOnly = true // Open in read-only mode for migration
-	
+
 	return badger.Open(opts)
 }
 
@@ -86,7 +86,7 @@ func (ms *MigrationService) migrateWorkflows() error {
 		opts.Prefix = []byte("mg_workflows:")
 		it := txn.NewIterator(opts)
 		defer it.Close()
-		
+
 		for it.Rewind(); it.Valid(); it.Next() {
 			item := it.Item()
 			key := string(item.Key())
@@ -94,7 +94,7 @@ func (ms *MigrationService) migrateWorkflows() error {
 		}
 		return nil
 	})
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to list workflow keys: %v", err)
 	}
@@ -103,21 +103,21 @@ func (ms *MigrationService) migrateWorkflows() error {
 
 	for _, key := range workflowKeys {
 		var workflowData []byte
-		
+
 		// Get the workflow data from Badger
 		err = badgerDB.View(func(txn *badger.Txn) error {
 			item, err := txn.Get([]byte(key))
 			if err != nil {
 				return err
 			}
-			
+
 			return item.Value(func(val []byte) error {
 				workflowData = make([]byte, len(val))
 				copy(workflowData, val)
 				return nil
 			})
 		})
-		
+
 		if err != nil {
 			log.Printf("Warning: failed to get workflow data for key %s: %v", key, err)
 			continue
@@ -155,11 +155,11 @@ func (ms *MigrationService) migrateWorkflows() error {
 			log.Printf("Warning: failed to parse metadata for workflow %s: %v", oldWf.ID, err)
 			continue
 		}
-		
+
 		newWorkflow := Workflow{
 			ID:        actualID,
 			Name:      oldWf.Name,
-			Path:      "", // Not used in old format
+			Path:      "",    // Not used in old format
 			UseVault:  false, // Default to false, user can update later
 			Metadata:  parsedMetadata,
 			CreatedAt: time.Now(),
@@ -198,7 +198,7 @@ func (ms *MigrationService) migrateTemplates() error {
 		opts.Prefix = []byte("mg_templates:")
 		it := txn.NewIterator(opts)
 		defer it.Close()
-		
+
 		for it.Rewind(); it.Valid(); it.Next() {
 			item := it.Item()
 			key := string(item.Key())
@@ -206,7 +206,7 @@ func (ms *MigrationService) migrateTemplates() error {
 		}
 		return nil
 	})
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to list template keys: %v", err)
 	}
@@ -215,21 +215,21 @@ func (ms *MigrationService) migrateTemplates() error {
 
 	for _, key := range templateKeys {
 		var templateData []byte
-		
+
 		// Get the template data from Badger
 		err = badgerDB.View(func(txn *badger.Txn) error {
 			item, err := txn.Get([]byte(key))
 			if err != nil {
 				return err
 			}
-			
+
 			return item.Value(func(val []byte) error {
 				templateData = make([]byte, len(val))
 				copy(templateData, val)
 				return nil
 			})
 		})
-		
+
 		if err != nil {
 			log.Printf("Warning: failed to get template data for key %s: %v", key, err)
 			continue
@@ -262,7 +262,7 @@ func (ms *MigrationService) migrateTemplates() error {
 			log.Printf("Warning: failed to parse metadata for template %s: %v", oldTmpl.Slug, err)
 			continue
 		}
-		
+
 		// Create a workflow entry for the template
 		newWorkflow := Workflow{
 			ID:        "tmpl_" + actualSlug,

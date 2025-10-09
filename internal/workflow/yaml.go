@@ -7,14 +7,14 @@ import (
 
 // YAMLWorkflow represents a workflow defined in YAML format
 type YAMLWorkflow struct {
-	Name        string                 `yaml:"name"`
-	Description *string                `yaml:"description,omitempty"`
-	PreChecks   []YAMLStep             `yaml:"pre_checks,omitempty"`
-	Steps       []YAMLStep             `yaml:"steps"`
-	Actions     map[string]YAMLStep    `yaml:"actions,omitempty"`
-	Config      YAMLConfig             `yaml:"config,omitempty"`
-	UseVault    bool                   `yaml:"use_vault,omitempty"`
-	Path        string                 `json:"-"` // Not stored in the YAML, but used for file location
+	Name        string              `yaml:"name"`
+	Description *string             `yaml:"description,omitempty"`
+	PreChecks   []YAMLStep          `yaml:"pre_checks,omitempty"`
+	Steps       []YAMLStep          `yaml:"steps"`
+	Actions     map[string]YAMLStep `yaml:"actions,omitempty"`
+	Config      YAMLConfig          `yaml:"config,omitempty"`
+	UseVault    bool                `yaml:"use_vault,omitempty"`
+	Path        string              `json:"-"` // Not stored in the YAML, but used for file location
 }
 
 // LoadYAMLWorkflow loads a workflow from a YAML file

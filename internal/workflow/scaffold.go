@@ -13,20 +13,20 @@ import (
 func ScaffoldYAMLWorkflow(name string, description string) error {
 	// Format the name to be a valid filename
 	formattedName := formatWorkflowName(name)
-	
+
 	// Create the workflows directory if it doesn't exist
 	if err := os.MkdirAll("./workflows", 0755); err != nil {
 		return fmt.Errorf("failed to create workflows directory: %v", err)
 	}
-	
+
 	// Create the file path
 	filePath := filepath.Join("./workflows", formattedName+".yaml")
-	
+
 	// Check if file already exists
 	if _, err := os.Stat(filePath); err == nil {
 		return fmt.Errorf("workflow file %s already exists", filePath)
 	}
-	
+
 	// Create the content with comments
 	content := fmt.Sprintf(`# %s - %s
 # 
@@ -96,7 +96,7 @@ use_vault: false
 	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write workflow file: %v", err)
 	}
-	
+
 	fmt.Printf("Workflow '%s' scaffolded successfully at %s\n", name, filePath)
 	return nil
 }
@@ -105,10 +105,10 @@ use_vault: false
 func ScaffoldProjectConfig(format string, description string) error {
 	var content string
 	var fileName string
-	
+
 	if format == "json" {
 		fileName = "migraine.json"
-		
+
 		// Create the example JSON content
 		descriptionPtr := &description
 		config := ProjectConfig{
@@ -154,17 +154,17 @@ func ScaffoldProjectConfig(format string, description string) error {
 			},
 			UseVault: true,
 		}
-		
+
 		jsonBytes, err := json.MarshalIndent(config, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal JSON configuration: %v", err)
 		}
-		
+
 		content = string(jsonBytes)
 	} else {
 		// Default to YAML
 		fileName = "migraine.yaml"
-		
+
 		// Create the example YAML content
 		content = fmt.Sprintf(`# %s - Project-level workflow configuration
 # 
@@ -233,17 +233,17 @@ config:
 use_vault: true
 `, time.Now().Format("2006-01-02 15:04:05"), description)
 	}
-	
+
 	// Check if file already exists
 	if _, err := os.Stat(fileName); err == nil {
 		return fmt.Errorf("project configuration file %s already exists", fileName)
 	}
-	
+
 	// Write the content to the file
 	if err := os.WriteFile(fileName, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write project configuration file: %v", err)
 	}
-	
+
 	fmt.Printf("Project configuration file '%s' created successfully\n", fileName)
 	return nil
 }
@@ -257,7 +257,7 @@ func stringPtr(s string) *string {
 func formatWorkflowName(name string) string {
 	// Replace spaces with underscores
 	name = strings.ReplaceAll(name, " ", "_")
-	
+
 	// Remove invalid characters
 	var validName strings.Builder
 	for _, r := range name {
@@ -265,6 +265,6 @@ func formatWorkflowName(name string) string {
 			validName.WriteRune(r)
 		}
 	}
-	
+
 	return validName.String()
 }

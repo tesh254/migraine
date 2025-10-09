@@ -2,10 +2,10 @@ package sqlite
 
 // StorageService provides a unified interface for all storage operations
 type StorageService struct {
-	dbService    *DBService
+	dbService     *DBService
 	workflowStore *WorkflowStore
-	vaultStore   *VaultStore
-	runStore     *RunStore
+	vaultStore    *VaultStore
+	runStore      *RunStore
 }
 
 func NewStorageService(dbService *DBService) (*StorageService, error) {
@@ -15,7 +15,7 @@ func NewStorageService(dbService *DBService) (*StorageService, error) {
 		vaultStore:    NewVaultStore(dbService),
 		runStore:      NewRunStore(dbService),
 	}
-	
+
 	return service, nil
 }
 

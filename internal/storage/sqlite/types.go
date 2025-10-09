@@ -28,10 +28,10 @@ type VaultEntry struct {
 
 // Run represents an execution run of a workflow
 type Run struct {
-	ID          int64     `json:"id" db:"id"`
-	WorkflowID  string    `json:"workflow_id" db:"workflow_id"`
-	Status      string    `json:"status" db:"status"`
-	StartedAt   time.Time `json:"started_at" db:"started_at"`
+	ID          int64      `json:"id" db:"id"`
+	WorkflowID  string     `json:"workflow_id" db:"workflow_id"`
+	Status      string     `json:"status" db:"status"`
+	StartedAt   time.Time  `json:"started_at" db:"started_at"`
 	CompletedAt *time.Time `json:"completed_at" db:"completed_at"`
-	Logs        *string   `json:"logs" db:"logs"`
+	Logs        *string    `json:"logs" db:"logs"`
 }

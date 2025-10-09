@@ -14,7 +14,7 @@ type Atom struct {
 }
 
 type Config struct {
-	Variables      map[string]interface{} `json:variables`
+	Variables      map[string]interface{} `json:"variables"`
 	StoreVariables bool                   `json:"store_variables"`
 }
 

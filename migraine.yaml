@@ -1,4 +1,4 @@
-# 2025-10-08 22:48:35 - Project-level workflow configuration
+# 2025-10-09 03:09:05 - Project-level workflow configuration for Go development
 # 
 # This is a project configuration file that can be used with 'migraine run'
 # when no workflow name is specified. The file should be named migraine.yml
@@ -7,59 +7,77 @@
 # This workflow will be automatically upserted to the database when run with 'migraine run'
 # without a name, making it available globally thereafter.
 
-name: project-name
-description: Project-level workflow configuration
+name: go-dev-workflow
+description: Go development workflow for testing, building and more
 
 # Pre-checks run before the main workflow steps
 # They are used for validation and dependency checks
 pre_checks:
-  # Verify Node.js and npm are available
-  - command: "which npm"
-    description: "Verify npm is available"
-  # Check if package.json exists
-  - command: "test -f package.json"
-    description: "Verify package.json exists"
-  # Check if git repository is clean
-  - command: "git diff --quiet || (echo 'Warning: uncommitted changes' && false)"
-    description: "Ensure git repository is clean"
+  # Verify Go is available
+  - command: "which go"
+    description: "Verify Go is installed"
+  # Check if go.mod exists
+  - command: "test -f go.mod"
+    description: "Verify go.mod exists"
 
 # Steps are the main commands that make up the workflow
 steps:
   # Install dependencies
-  - command: "npm install"
-    description: "Install project dependencies"
+  - command: "go mod tidy"
+    description: "Tidy and download Go dependencies"
+  # Run vet to catch potential issues
+  - command: "go vet ./..."
+    description: "Run Go vet to catch potential issues"
   # Build the project
-  - command: "npm run build"
+  - command: "go build ./..."
     description: "Build the application"
   # Run tests
-  - command: "npm run test"
-    description: "Run project tests"
+  - command: "go test -v ./..."
+    description: "Run all project tests"
   # Run linter
-  - command: "npm run lint"
-    description: "Lint the code"
+  - command: "go fmt ./..."
+    description: "Format Go code"
 
 # Actions are optional commands that can be run independently
 actions:
-  deploy:
-    command: "npm run deploy"
-    description: "Deploy the application to production"
-  cleanup:
-    command: "rm -rf ./dist ./build"
-    description: "Clean up build artifacts"
-  setup-dev:
-    command: "npm install && npm run setup"
-    description: "Set up development environment"
+  build:
+    command: "go build -o bin/{{.APP_NAME}} ."
+    description: "Build the Go application"
+  test:
+    command: "go test -v -race ./..."
+    description: "Run tests with race detection"
+  test-coverage:
+    command: "go test -v -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html"
+    description: "Run tests and generate coverage report"
+  lint:
+    command: "go fmt ./... && golangci-lint run"
+    description: "Lint the code with go fmt and golangci-lint"
+  run:
+    command: "go run main.go"
+    description: "Run the Go application"
+  clean:
+    command: "go clean && rm -rf ./bin ./dist"
+    description: "Clean build artifacts"
+  install:
+    command: "go install ./..."
+    description: "Install all Go binaries"
+  mod-download:
+    command: "go mod download"
+    description: "Download Go modules to local cache"
+  tidy:
+    command: "go mod tidy && go mod verify"
+    description: "Tidy and verify Go modules"
 
 # Configuration for the workflow
 config:
   # Variables that can be used in the workflow
   variables:
-    environment:
-      - "required"  # This variable is required
+    APP_NAME:
+      - "required"  # This variable is required for build action
   # Whether to store variables in the workflow or prompt for them
   store_variables: false
 
 # Whether to use the vault for variable resolution
 # When true, variables are resolved from the vault system
 # When false, variables are loaded from environment files or prompted
-use_vault: true
+use_vault: false

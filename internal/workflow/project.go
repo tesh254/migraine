@@ -25,24 +25,24 @@ type YAMLConfig struct {
 
 // ProjectConfig represents the structure of migraine.yml or migraine.json
 type ProjectConfig struct {
-	Name        string     `yaml:"name" json:"name"`
-	Description *string    `yaml:"description,omitempty" json:"description,omitempty"`
-	PreChecks   []YAMLStep `yaml:"pre_checks,omitempty" json:"pre_checks,omitempty"`
-	Steps       []YAMLStep `yaml:"steps" json:"steps"`
+	Name        string              `yaml:"name" json:"name"`
+	Description *string             `yaml:"description,omitempty" json:"description,omitempty"`
+	PreChecks   []YAMLStep          `yaml:"pre_checks,omitempty" json:"pre_checks,omitempty"`
+	Steps       []YAMLStep          `yaml:"steps" json:"steps"`
 	Actions     map[string]YAMLStep `yaml:"actions,omitempty" json:"actions,omitempty"`
-	Config      YAMLConfig `yaml:"config,omitempty" json:"config,omitempty"`
-	UseVault    bool       `yaml:"use_vault,omitempty" json:"use_vault,omitempty"`
-	EnvFile     string     `yaml:"env_file,omitempty" json:"env_file,omitempty"`
+	Config      YAMLConfig          `yaml:"config,omitempty" json:"config,omitempty"`
+	UseVault    bool                `yaml:"use_vault,omitempty" json:"use_vault,omitempty"`
+	EnvFile     string              `yaml:"env_file,omitempty" json:"env_file,omitempty"`
 }
 
 // LoadProjectWorkflow loads a workflow from migraine.yml or migraine.json in the current directory
 func LoadProjectWorkflow() (*YAMLWorkflow, error) {
 	// Look for migraine.yml or migraine.json in current directory
 	possibleFiles := []string{"migraine.yml", "migraine.yaml", "migraine.json"}
-	
+
 	for _, filename := range possibleFiles {
 		filePath := filepath.Join(".", filename)
-		
+
 		if _, err := os.Stat(filePath); err == nil {
 			// File exists, load it
 			if strings.HasSuffix(filename, ".json") {
@@ -52,7 +52,7 @@ func LoadProjectWorkflow() (*YAMLWorkflow, error) {
 			}
 		}
 	}
-	
+
 	return nil, fmt.Errorf("no migraine.yml or migraine.json file found in current directory")
 }
 
