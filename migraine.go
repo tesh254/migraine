@@ -5,11 +5,26 @@ import (
 	"time"
 
 	"github.com/tesh254/migraine/cmd"
-	"github.com/tesh254/migraine/internal/constants"
 	"github.com/tesh254/migraine/internal/storage/sqlite"
+	"github.com/tesh254/migraine/internal/version"
 )
 
-var Version = constants.VERSION
+var BuildVersion string
+var BuildCommit string
+var BuildDate string
+
+func init() {
+	// Set up build version info from ldflags in the version package
+	if BuildVersion != "" {
+		version.BuildVersion = BuildVersion
+	}
+	if BuildCommit != "" {
+		version.BuildCommit = BuildCommit
+	}
+	if BuildDate != "" {
+		version.BuildDate = BuildDate
+	}
+}
 
 func main() {
 	// Run migration from old Badger storage to new SQLite storage

@@ -70,8 +70,13 @@ jobs:
           GOOS: ${{ matrix.platform }}
           GOARCH: ${{ matrix.arch }}
         run: |
-          # Build with BuildInfo - no ldflags needed!
-          go build -o dist/migraine-${{ matrix.platform }}-${{ matrix.arch }} .
+          # Set version variables from GitHub Actions environment
+          VERSION=${{ github.ref_name }}
+          COMMIT=${{ github.sha }}
+          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          
+          # Build with ldflags to embed version information
+          go build -ldflags "-X main.BuildVersion=${VERSION} -X main.BuildCommit=${COMMIT::7} -X main.BuildDate=${DATE}" -o dist/migraine-${{ matrix.platform }}-${{ matrix.arch }} .
           cd dist && ln -s migraine-${{ matrix.platform }}-${{ matrix.arch }} mgr-${{ matrix.platform }}-${{ matrix.arch }}
 
       - name: Test version info

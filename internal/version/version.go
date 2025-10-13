@@ -2,10 +2,18 @@ package version
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 	"runtime/debug"
 	"strings"
 	"time"
+)
+
+// These variables can be set at build time using ldflags
+var (
+	BuildVersion string
+	BuildCommit  string
+	BuildDate    string
 )
 
 // BuildInfo contains all build information
@@ -36,6 +44,49 @@ func GetBuildInfo() BuildInfo {
 		Compiler:  runtime.Compiler,
 	}
 
+	// Check for build-time variables set via ldflags first
+	if BuildVersion != "" {
+		info.Version = BuildVersion
+	}
+	if BuildCommit != "" {
+		info.GitCommit = BuildCommit
+		if len(BuildCommit) > 7 {
+			info.GitCommit = BuildCommit[:7]
+		}
+	}
+	if BuildDate != "" {
+		info.BuildDate = BuildDate
+	}
+
+	// Check for GitHub Actions environment variables
+	if info.Version == "unknown" {
+		if githubRef := os.Getenv("GITHUB_REF_NAME"); githubRef != "" {
+			if strings.HasPrefix(githubRef, "v") {
+				info.Version = githubRef
+				info.GitTag = githubRef
+			} else {
+				// If GITHUB_REF_NAME exists but doesn't start with 'v', it might be a tag like '1.0.0'
+				info.Version = githubRef
+				info.GitTag = githubRef
+			}
+		}
+	}
+
+	// Check for other version environment variables
+	if info.Version == "unknown" {
+		if version := os.Getenv("VERSION"); version != "" {
+			info.Version = version
+		}
+	}
+	if info.GitCommit == "unknown" {
+		if gitCommit := os.Getenv("GIT_COMMIT"); gitCommit != "" {
+			info.GitCommit = gitCommit
+			if len(gitCommit) > 7 {
+				info.GitCommit = gitCommit[:7]
+			}
+		}
+	}
+
 	buildInfo, ok := debug.ReadBuildInfo()
 	if !ok {
 		return info
@@ -45,9 +96,11 @@ func GetBuildInfo() BuildInfo {
 	info.ModulePath = buildInfo.Main.Path
 	info.ModuleSum = buildInfo.Main.Sum
 
-	// If we have a version from go.mod/module system, use it
-	if buildInfo.Main.Version != "" && buildInfo.Main.Version != "(devel)" {
-		info.Version = buildInfo.Main.Version
+	// If we have a version from go.mod/module system, use it (but only if not already set by env variables)
+	if info.Version == "unknown" {
+		if buildInfo.Main.Version != "" && buildInfo.Main.Version != "(devel)" {
+			info.Version = buildInfo.Main.Version
+		}
 	}
 
 	// Extract VCS (Version Control System) information
@@ -58,17 +111,24 @@ func GetBuildInfo() BuildInfo {
 			// Usually "git"
 			continue
 		case "vcs.revision":
-			info.GitCommit = setting.Value
-			hasVCSInfo = true
-			// Create short commit hash
-			if len(setting.Value) > 7 {
-				info.GitCommit = setting.Value[:7]
+			// Only update if not already set by environment variable
+			if info.GitCommit == "unknown" {
+				info.GitCommit = setting.Value
+				if len(setting.Value) > 7 {
+					info.GitCommit = setting.Value[:7]
+				}
 			}
+			hasVCSInfo = true
 		case "vcs.time":
-			info.BuildDate = setting.Value
+			if info.BuildDate == "unknown" {
+				info.BuildDate = setting.Value
+			}
 			hasVCSInfo = true
 		case "vcs.modified":
-			info.IsModified = setting.Value == "true"
+			// Only update if not already set by environment variable
+			if info.GitCommit == "unknown" {
+				info.IsModified = setting.Value == "true"
+			}
 			hasVCSInfo = true
 		case "-tags":
 			// Build tags could be useful
@@ -80,16 +140,15 @@ func GetBuildInfo() BuildInfo {
 	}
 
 	// Update GitTag if we have proper VCS information and the version looks like a Git tag
-	if hasVCSInfo && buildInfo.Main.Version != "" && 
+	if info.GitTag == "unknown" && hasVCSInfo && buildInfo.Main.Version != "" && 
 	   buildInfo.Main.Version != "(devel)" && 
 	   strings.HasPrefix(buildInfo.Main.Version, "v") {
 		// Use the module version (which should reflect the Git tag when built at a tag)
-		info.Version = buildInfo.Main.Version
 		info.GitTag = buildInfo.Main.Version
 	}
 
 	// If we have VCS info but no version, create a development version
-	if hasVCSInfo && (info.Version == "unknown" || info.Version == "(devel)") {
+	if info.Version == "unknown" && hasVCSInfo {
 		if info.GitCommit != "unknown" {
 			info.Version = fmt.Sprintf("dev-%s", info.GitCommit)
 			if info.IsModified {
@@ -98,13 +157,13 @@ func GetBuildInfo() BuildInfo {
 		}
 	}
 
-	// Try to parse git tag information if we have a proper version
+	// Try to parse git tag information if we have a proper version but no GitTag
 	if info.GitTag == "unknown" && strings.HasPrefix(info.Version, "v") && len(strings.Split(info.Version, ".")) >= 2 {
 		info.GitTag = info.Version
 	}
 
 	// Format build date if it's in Go's time format
-	if info.BuildDate != "unknown" {
+	if info.BuildDate == "unknown" {
 		if parsedTime, err := time.Parse(time.RFC3339, info.BuildDate); err == nil {
 			info.BuildDate = parsedTime.Format("2006-01-02T15:04:05Z")
 		}
