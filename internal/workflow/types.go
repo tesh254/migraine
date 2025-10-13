@@ -6,14 +6,14 @@ type Atom struct {
 }
 
 type Config struct {
-	Variables      map[string]interface{} `json:variables`
-	StoreVariables bool                   `json:store_variables`
+	Variables      map[string]interface{} `json:"variables"`
+	StoreVariables bool                   `json:"store_variables"`
 }
 
 type Workflow struct {
 	ID          string          `json:"id"`
 	Name        string          `json:"name"`
-	PreChecks   []Atom          `json:"pre_checks`
+	PreChecks   []Atom          `json:"pre_checks"`
 	Steps       []Atom          `json:"steps"`
 	Description *string         `json:"description"`
 	Actions     map[string]Atom `json:"actions"`

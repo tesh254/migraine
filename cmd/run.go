@@ -5,10 +5,16 @@ import (
 )
 
 var runCmd = &cobra.Command{
-	Use:   "run [workflow_id]",
-	Short: "Run a workflow",
+	Use:   "run [workflow_name]",
+	Short: "Run a workflow (new v2 command)",
 	Run: func(cmd *cobra.Command, args []string) {
-		handleRunWorkflow(args[0], cmd)
+		if len(args) == 0 {
+			// No workflow name provided, look for migraine.yml/migraine.json
+			handleRunProjectWorkflow(cmd)
+		} else {
+			// Workflow name provided, run the existing logic
+			handleRunWorkflowV2(args[0], cmd)
+		}
 	},
 }
 
