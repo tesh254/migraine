@@ -321,7 +321,8 @@ func executeYAMLWorkflow(yamlWf *workflow.YAMLWorkflow, variables map[string]str
 		}
 	}
 
-	// Run steps section
+	// For YAML workflows without specific actions, run the main steps
+	// (Note: this function doesn't currently handle specific actions like the project workflow does)
 	scriptCount := len(yamlWf.Steps)
 	ui.SectionHeader("SCRIPTS")
 
@@ -425,8 +426,43 @@ func executeProjectYAMLWorkflow(yamlWf *workflow.YAMLWorkflow, variables map[str
 		os.Exit(1)
 	}
 
+	// Track precheck statistics
+	precheckCount := 0
+	prechecksPassed := 0
+	prechecksFailed := 0
+	prechecksWarn := 0
+
+	// Run pre-checks section (always run pre-checks regardless of whether actions or main steps are being run)
+	ui.SectionHeader("PRECHECKS")
+
+	for i, check := range yamlWf.PreChecks {
+		precheckStartTime := time.Now()
+		command, err := varResolver.ApplyVariables(check.Command, variables)
+		if err != nil {
+			ui.LogErrorBordered(fmt.Sprintf("Failed to apply variables to pre-check %d: %v", i+1, err))
+			os.Exit(1)
+		}
+
+		// Execute the command using the execution package
+		precheckCount++
+		err = execution.ExecuteCommand(command)
+		duration := time.Since(precheckStartTime)
+
+		if err != nil {
+			ui.PrecheckResult(*check.Description, "fail", duration, "")
+			ui.LogErrorBordered(fmt.Sprintf("Pre-check %d failed: %v", i+1, err))
+			prechecksFailed++
+			os.Exit(1)
+		} else {
+			ui.PrecheckResult(*check.Description, "ok", duration, "")
+			prechecksPassed++
+			ui.LogInfoBordered("Pre-check completed successfully")
+		}
+	}
+
+	// Check if specific action is requested (after running pre-checks)
 	if len(actionFlags) > 0 {
-		// Run specific action instead of main steps
+		// Run specific action instead of main steps (but after pre-checks)
 		ui.SectionHeader("ACTIONS")
 
 		for _, actionName := range actionFlags {
@@ -458,41 +494,7 @@ func executeProjectYAMLWorkflow(yamlWf *workflow.YAMLWorkflow, variables map[str
 		return
 	}
 
-	// Track precheck statistics
-	precheckCount := 0
-	prechecksPassed := 0
-	prechecksFailed := 0
-	prechecksWarn := 0
-
-	// Run pre-checks section
-	ui.SectionHeader("PRECHECKS")
-
-	for i, check := range yamlWf.PreChecks {
-		precheckStartTime := time.Now()
-		command, err := varResolver.ApplyVariables(check.Command, variables)
-		if err != nil {
-			ui.LogErrorBordered(fmt.Sprintf("Failed to apply variables to pre-check %d: %v", i+1, err))
-			os.Exit(1)
-		}
-
-		// Execute the command using the execution package
-		precheckCount++
-		err = execution.ExecuteCommand(command)
-		duration := time.Since(precheckStartTime)
-
-		if err != nil {
-			ui.PrecheckResult(*check.Description, "fail", duration, "")
-			ui.LogErrorBordered(fmt.Sprintf("Pre-check %d failed: %v", i+1, err))
-			prechecksFailed++
-			os.Exit(1)
-		} else {
-			ui.PrecheckResult(*check.Description, "ok", duration, "")
-			prechecksPassed++
-			ui.LogInfoBordered("Pre-check completed successfully")
-		}
-	}
-
-	// Run steps section
+	// Run steps section (only if no actions were specified)
 	scriptCount := len(yamlWf.Steps)
 	ui.SectionHeader("SCRIPTS")
 
