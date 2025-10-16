@@ -606,3 +606,233 @@ func handleWorkflowInfoV2(workflowName string) {
 		}
 	}
 }
+
+func handleRunProjectPreChecks(cmd *cobra.Command) {
+	// Look for migraine.yml or migraine.json in current directory
+	projWf, err := workflow.LoadProjectWorkflow()
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to load project workflow: %v", err))
+		utils.LogInfo("Create a 'migraine.yml' or 'migraine.json' file in your current directory to use this feature")
+		os.Exit(1)
+	}
+
+	// Validate workflow name
+	if err := workflow.ValidateWorkflowName(projWf.Name); err != nil {
+		utils.LogError(fmt.Sprintf("Invalid workflow name: %v", err))
+		os.Exit(1)
+	}
+
+	// Check if the workflow has pre-checks
+	if len(projWf.PreChecks) == 0 {
+		utils.LogInfo("No pre-checks found in the project workflow")
+		return
+	}
+
+	// Get storage service
+	storage := sqlite.GetStorageService()
+
+	// Upsert the workflow to the database
+	if err := workflow.UpsertProjectWorkflowToDB(projWf, storage); err != nil {
+		utils.LogError(fmt.Sprintf("Failed to upsert project workflow to database: %v", err))
+		os.Exit(1)
+	}
+
+	utils.LogInfo(fmt.Sprintf("Project workflow '%s' loaded and upserted to database", projWf.Name))
+
+	// Process variables from flags
+	flagVars, err := cmd.Flags().GetStringArray("var")
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to get variables: %v", err))
+		os.Exit(1)
+	}
+
+	variables := make(map[string]string)
+	for _, v := range flagVars {
+		parts := strings.SplitN(v, "=", 2)
+		if len(parts) != 2 {
+			utils.LogError(fmt.Sprintf("Invalid variable format: %s. Use KEY=VALUE format", v))
+			os.Exit(1)
+		}
+		variables[parts[0]] = parts[1]
+	}
+
+	// Create variable resolver
+	varResolver := workflow.NewVariableResolver(storage)
+
+	// Resolve variables based on workflow configuration
+	resolvedVars, err := varResolver.ResolveVariables(projWf.Name, projWf.UseVault, variables)
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to resolve variables: %v", err))
+		os.Exit(1)
+	}
+
+	// Execute only the pre-checks of the project workflow
+	executeProjectYAMLWorkflowPreChecksOnly(projWf, resolvedVars)
+}
+
+func handleRunWorkflowPreChecksFromStoredDirectory(workflowName string, cmd *cobra.Command) {
+	storage := sqlite.GetStorageService()
+
+	// Get the workflow from the database
+	dbWf, err := storage.WorkflowStore().GetWorkflow(workflowName)
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Workflow '%s' not found in database", workflowName))
+		os.Exit(1)
+	}
+
+	// Get the stored working directory from the vault
+	var workingDir string
+	workingDirEntry, err := storage.VaultStore().GetVariableWithFallback("WORKING_DIR", dbWf.ID)
+	if err == nil && workingDirEntry != nil {
+		workingDir = workingDirEntry.Value
+	} else {
+		// If no stored directory found, use current directory
+		utils.LogInfo(fmt.Sprintf("No stored working directory found for workflow '%s', using current directory", workflowName))
+		workingDir, err = os.Getwd()
+		if err != nil {
+			utils.LogError(fmt.Sprintf("Failed to get current directory: %v", err))
+			os.Exit(1)
+		}
+	}
+
+	// Change to the working directory
+	currentDir, err := os.Getwd()
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to get current directory: %v", err))
+		os.Exit(1)
+	}
+
+	if err = os.Chdir(workingDir); err != nil {
+		utils.LogError(fmt.Sprintf("Failed to change to directory '%s': %v", workingDir, err))
+		os.Exit(1)
+	}
+
+	// Log the directory change
+	utils.LogInfo(fmt.Sprintf("Changed to directory: %s", workingDir))
+
+	// Parse the workflow metadata to get the YAML workflow
+	var projectConfig workflow.ProjectConfig
+	metadataBytes, err := json.Marshal(dbWf.Metadata)
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to marshal workflow metadata: %v", err))
+		// Restore original directory before exiting
+		os.Chdir(currentDir)
+		os.Exit(1)
+	}
+
+	if err := json.Unmarshal(metadataBytes, &projectConfig); err != nil {
+		utils.LogError(fmt.Sprintf("Failed to unmarshal workflow metadata: %v", err))
+		// Restore original directory before exiting
+		os.Chdir(currentDir)
+		os.Exit(1)
+	}
+
+	// Convert to YAMLWorkflow format
+	yamlWf := &workflow.YAMLWorkflow{
+		Name:        dbWf.Name,
+		Description: projectConfig.Description,
+		PreChecks:   projectConfig.PreChecks,
+		Steps:       projectConfig.Steps,
+		Actions:     projectConfig.Actions,
+		Config:      projectConfig.Config,
+		UseVault:    dbWf.UseVault,
+		Path:        dbWf.Path,
+	}
+
+	// Check if the workflow has pre-checks
+	if len(yamlWf.PreChecks) == 0 {
+		utils.LogInfo("No pre-checks found in the workflow")
+		// Restore original directory
+		os.Chdir(currentDir)
+		return
+	}
+
+	// Process variables from flags
+	flagVars, err := cmd.Flags().GetStringArray("var")
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to get variables: %v", err))
+		// Restore original directory before exiting
+		os.Chdir(currentDir)
+		os.Exit(1)
+	}
+
+	variables := make(map[string]string)
+	for _, v := range flagVars {
+		parts := strings.SplitN(v, "=", 2)
+		if len(parts) != 2 {
+			utils.LogError(fmt.Sprintf("Invalid variable format: %s. Use KEY=VALUE format", v))
+			// Restore original directory before exiting
+			os.Chdir(currentDir)
+			os.Exit(1)
+		}
+		variables[parts[0]] = parts[1]
+	}
+
+	// Create variable resolver
+	varResolver := workflow.NewVariableResolver(storage)
+
+	// Resolve variables based on workflow configuration
+	resolvedVars, err := varResolver.ResolveVariables(yamlWf.Name, yamlWf.UseVault, variables)
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to resolve variables: %v", err))
+		// Restore original directory before exiting
+		os.Chdir(currentDir)
+		os.Exit(1)
+	}
+
+	// Execute only the pre-checks of the workflow
+	executeProjectYAMLWorkflowPreChecksOnly(yamlWf, resolvedVars)
+
+	// Restore original directory
+	os.Chdir(currentDir)
+	utils.LogInfo(fmt.Sprintf("Restored to original directory: %s", currentDir))
+}
+
+func executeProjectYAMLWorkflowPreChecksOnly(yamlWf *workflow.YAMLWorkflow, variables map[string]string) {
+	// Display workflow header
+	ui.WorkflowHeader(yamlWf.Name, "pre-checks")
+	startTime := time.Now()
+
+	// Create variable resolver for applying variables
+	varResolver := workflow.NewVariableResolver(sqlite.GetStorageService())
+
+	// Track precheck statistics
+	precheckCount := 0
+	prechecksPassed := 0
+	prechecksFailed := 0
+	prechecksWarn := 0
+
+	// Run pre-checks section
+	ui.SectionHeader("PRECHECKS")
+
+	for i, check := range yamlWf.PreChecks {
+		precheckStartTime := time.Now()
+		command, err := varResolver.ApplyVariables(check.Command, variables)
+		if err != nil {
+			ui.LogErrorBordered(fmt.Sprintf("Failed to apply variables to pre-check %d: %v", i+1, err))
+			os.Exit(1)
+		}
+
+		// Execute the command using the execution package
+		precheckCount++
+		err = execution.ExecuteCommand(command)
+		duration := time.Since(precheckStartTime)
+
+		if err != nil {
+			ui.PrecheckResult(*check.Description, "fail", duration, "")
+			ui.LogErrorBordered(fmt.Sprintf("Pre-check %d failed: %v", i+1, err))
+			prechecksFailed++
+			os.Exit(1)
+		} else {
+			ui.PrecheckResult(*check.Description, "ok", duration, "")
+			prechecksPassed++
+			ui.LogInfoBordered("Pre-check completed successfully")
+		}
+	}
+
+	// Display summary
+	totalDuration := time.Since(startTime)
+	ui.Summary("SUCCESS", totalDuration, prechecksPassed, prechecksFailed, prechecksWarn, 0, 0, "", "")
+
+	ui.LogSuccessBordered(fmt.Sprintf("Project workflow pre-checks for '%s' completed successfully", yamlWf.Name))
+}

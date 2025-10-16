@@ -1,0 +1,12 @@
+name: test-workflow
+description: A test workflow to verify the new pre-checks functionality
+
+pre_checks:
+  - command: "echo 'Checking if we are in the right directory...'"
+    description: "Verify current directory"
+  - command: "pwd"
+    description: "Print working directory"
+
+steps:
+  - command: "echo 'Running main workflow step'"
+    description: "Main step"

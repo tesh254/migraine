@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/tesh254/migraine/internal/storage/sqlite"
 	"gopkg.in/yaml.v3"
@@ -140,11 +141,58 @@ func UpsertProjectWorkflowToDB(yamlWf *YAMLWorkflow, storage *sqlite.StorageServ
 	_, err = storage.WorkflowStore().GetWorkflow(yamlWf.Name)
 	if err != nil {
 		// If not found, create new workflow
-		return storage.WorkflowStore().CreateWorkflow(newWorkflow)
+		err = storage.WorkflowStore().CreateWorkflow(newWorkflow)
+		if err != nil {
+			return err
+		}
 	} else {
 		// If found, update existing workflow
-		return storage.WorkflowStore().UpdateWorkflow(newWorkflow)
+		err = storage.WorkflowStore().UpdateWorkflow(newWorkflow)
+		if err != nil {
+			return err
+		}
 	}
+
+	// Store the working directory as a vault entry
+	if yamlWf.Path != "" {
+		// Extract directory from the path and convert to absolute path
+		dir := filepath.Dir(yamlWf.Path)
+		absDir, err := filepath.Abs(dir)
+		if err != nil {
+			// If we can't get absolute path, use the relative one
+			absDir = dir
+		}
+		
+		// Create or update the WORKING_DIR vault entry for this workflow
+		workingDirEntry := sqlite.VaultEntry{
+			Key:        "WORKING_DIR",
+			Value:      absDir,
+			Scope:      "workflow",
+			WorkflowID: &yamlWf.Name,
+			CreatedAt:  time.Now(),
+			UpdatedAt:  time.Now(),
+		}
+		
+		// Check if a WORKING_DIR entry already exists for this workflow
+		existingEntry, err := storage.VaultStore().GetVariable("WORKING_DIR", "workflow", &yamlWf.Name)
+		if err == nil && existingEntry != nil {
+			// Entry exists, update it
+			err = storage.VaultStore().UpdateVariable("WORKING_DIR", "workflow", &yamlWf.Name, absDir)
+			if err != nil {
+				// Log the error but don't fail the entire operation
+				fmt.Printf("Warning: failed to update WORKING_DIR vault entry: %v\n", err)
+			}
+		} else {
+			// Entry doesn't exist, create it
+			err = storage.VaultStore().CreateVariable(workingDirEntry)
+			if err != nil {
+				// Log the error but don't fail the entire operation
+				fmt.Printf("Warning: failed to create WORKING_DIR vault entry: %v\n", err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // ValidateWorkflowName checks if the workflow name is a valid slug

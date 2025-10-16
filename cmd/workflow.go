@@ -95,6 +95,23 @@ var workflowValidateCmd = &cobra.Command{
 	},
 }
 
+var workflowPreChecksCmd = &cobra.Command{
+	Use:   "pre-checks [name]",
+	Short: "Run pre-checks from migraine.yaml in current directory or by workflow name",
+	Long:  "Run only the pre-checks section of the migraine.yaml file in the current directory, or for a specific workflow by name",
+	Args:  cobra.MaximumNArgs(1), // Allow zero args to run project config, or one arg for specific workflow
+	Run: func(cmd *cobra.Command, args []string) {
+		if len(args) == 0 {
+			// No workflow name provided, run project pre-checks from current directory
+			handleRunProjectPreChecks(cmd)
+		} else {
+			// Workflow name provided, run pre-checks for specific workflow from its stored directory
+			workflowName := args[0]
+			handleRunWorkflowPreChecksFromStoredDirectory(workflowName, cmd)
+		}
+	},
+}
+
 var workflowRunCmd = &cobra.Command{
 	Use:   "run [name]",
 	Short: "Run a workflow (new command for v2)",
@@ -124,6 +141,7 @@ func init() {
 	workflowInitCmd.Flags().StringP("description", "d", "", "Description for the workflow")
 	workflowInitCmd.Flags().Bool("yml", false, "Generate project configuration file as migraine.yml")
 	workflowInitCmd.Flags().Bool("json", false, "Generate project configuration file as migraine.json")
+	workflowPreChecksCmd.Flags().StringArrayP("var", "v", []string{}, "Variables in KEY=VALUE format")
 }
 
 // Create a top-level init command as an alias to workflow init
@@ -186,6 +204,10 @@ func init() {
 	initCmd.Flags().Bool("yml", false, "Generate project configuration file as migraine.yml")
 	initCmd.Flags().Bool("json", false, "Generate project configuration file as migraine.json")
 
+	// Add flags to workflow run command
+	workflowRunCmd.Flags().StringArrayP("var", "v", []string{}, "Variables in KEY=VALUE format")
+	workflowRunCmd.Flags().StringArrayP("action", "a", []string{}, "Action to run")
+
 	// Add commands
 	rootCmd.AddCommand(initCmd) // Add top-level init command
 	rootCmd.AddCommand(workflowCmd)
@@ -193,5 +215,6 @@ func init() {
 	workflowCmd.AddCommand(workflowListCmd)
 	workflowCmd.AddCommand(workflowValidateCmd)
 	workflowCmd.AddCommand(workflowRunCmd)
+	workflowCmd.AddCommand(workflowPreChecksCmd)
 	workflowCmd.AddCommand(workflowInfoCmd)
 }
