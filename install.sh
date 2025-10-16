@@ -133,59 +133,115 @@ main() {
 
     # Install man page if possible
     if command -v man >/dev/null 2>&1; then
-        # Find the system man directory
-        MAN_DIR=""
-        for dir in "${install_dir}/../share/man" "/usr/local/share/man" "/usr/share/man" "/opt/homebrew/share/man"; do
-            if [ -d "$dir" ] && [ -w "$dir" ]; then
-                MAN_DIR="$dir"
-                break
+        # Try to find a writable man directory (try user directory first, then system directories)
+        MAN1_DIR=""
+        
+        # Check user directory first and create the full path if needed
+        USER_MAN_DIR="$HOME/.local/share/man/man1"
+        USER_MAN_PARENT_DIR="$HOME/.local/share/man"
+        
+        # Create the parent directories to ensure full path exists
+        if mkdir -p "$USER_MAN_PARENT_DIR" 2>/dev/null && mkdir -p "$USER_MAN_DIR" 2>/dev/null; then
+            MAN1_DIR="$USER_MAN_DIR"
+        else
+            # Try system directories, using the first one we can write to
+            for dir in "/usr/local/share/man/man1" "/opt/homebrew/share/man/man1" "/usr/share/man/man1"; do
+                if [ -d "$dir" ] && [ -w "$dir" ]; then
+                    MAN1_DIR="$dir"
+                    break
+                fi
+            done
+        fi
+        
+        # If no writable directory found, try to use sudo for system directory or fallback to user
+        if [ -z "$MAN1_DIR" ]; then
+            # Check if we can create user directory path with mkdir if needed
+            if mkdir -p "$USER_MAN_PARENT_DIR" 2>/dev/null && mkdir -p "$USER_MAN_DIR" 2>/dev/null; then
+                MAN1_DIR="$USER_MAN_DIR"
+            else
+                # If system directories exist but aren't writable, we'll try sudo later
+                for dir in "/usr/local/share/man/man1" "/opt/homebrew/share/man/man1" "/usr/share/man/man1"; do
+                    if [ -d "$dir" ]; then
+                        MAN1_DIR="$dir"
+                        break
+                    fi
+                done
             fi
-        done
+        fi
 
-        if [ -n "$MAN_DIR" ]; then
-            # Create man1 directory if it doesn't exist
-            MAN1_DIR="$MAN_DIR/man1"
-            sudo mkdir -p "$MAN1_DIR" 2>/dev/null || mkdir -p "$HOME/.local/share/man/man1" 2>/dev/null
-            
-            # Try to generate man page using the installed binary
-            if "${install_dir}/migraine" man generate --output "$tmp_dir" >/dev/null 2>&1; then
-                MAN_FILE="$tmp_dir/migraine.1"
-                if [ -f "$MAN_FILE" ]; then
-                    # Try to install to system location first, fallback to user location
+        # Generate and install the man page
+        if "${install_dir}/migraine" man generate --output "$tmp_dir" >/dev/null 2>&1; then
+            MAN_FILE="$tmp_dir/migraine.1"
+            if [ -f "$MAN_FILE" ]; then
+                # Install to appropriate location
+                if [ -n "$MAN1_DIR" ]; then
+                    # Create the directory if it doesn't exist
+                    if [ ! -d "$MAN1_DIR" ]; then
+                        if [ -w "$(dirname "$MAN1_DIR")" ]; then
+                            mkdir -p "$MAN1_DIR"
+                        else
+                            # Need sudo for system directories
+                            sudo mkdir -p "$MAN1_DIR" 2>/dev/null || true
+                        fi
+                    fi
+                    
+                    # Copy the man page
                     if [ -w "$MAN1_DIR" ]; then
-                        sudo cp "$MAN_FILE" "$MAN1_DIR/"
-                        if command -v gzip >/dev/null 2>&1; then
-                            sudo gzip "$MAN1_DIR/migraine.1" 2>/dev/null || true
-                        else
-                            gzip "$MAN_FILE"
-                        fi
-                        
-                        # Create symlink for mgr alias if possible
-                        sudo ln -sf "$MAN1_DIR/migraine.1.gz" "$MAN1_DIR/mgr.1.gz" 2>/dev/null || true
+                        cp "$MAN_FILE" "$MAN1_DIR/migraine.1"
                     else
-                        # Fallback: install to user's man directory
-                        USER_MAN_DIR="$HOME/.local/share/man/man1"
-                        mkdir -p "$USER_MAN_DIR"
-                        cp "$MAN_FILE" "$USER_MAN_DIR/migraine.1"
-                        if command -v gzip >/dev/null 2>&1; then
-                            gzip "$USER_MAN_DIR/migraine.1" 2>/dev/null || true
+                        # Use sudo for system directories
+                        sudo cp "$MAN_FILE" "$MAN1_DIR/migraine.1" 2>/dev/null || {
+                            # If sudo fails, fall back to user directory
+                            MAN1_DIR="$USER_MAN_DIR"
+                            mkdir -p "$MAN1_DIR"
+                            cp "$MAN_FILE" "$MAN1_DIR/migraine.1"
+                        }
+                    fi
+                    
+                    # Compress the man page if gzip is available
+                    if command -v gzip >/dev/null 2>&1; then
+                        if [ -w "$MAN1_DIR" ]; then
+                            gzip -f "$MAN1_DIR/migraine.1" 2>/dev/null || true
                         else
-                            gzip "$MAN_FILE"
+                            sudo gzip -f "$MAN1_DIR/migraine.1" 2>/dev/null || {
+                                # If sudo gzip fails, try with user directory
+                                if [[ "$MAN1_DIR" == *"$HOME"* ]]; then
+                                    gzip -f "$MAN1_DIR/migraine.1" 2>/dev/null || true
+                                fi
+                            }
                         fi
-                        
-                        # Create mgr alias
-                        ln -sf "$USER_MAN_DIR/migraine.1.gz" "$USER_MAN_DIR/mgr.1.gz" 2>/dev/null || true
-                        
-                        # Add manpath to shell config if not already there
+                    fi
+                    
+                    # Create symlink for mgr alias
+                    MANPAGE_FILE="migraine.1"
+                    if [ -f "$MAN1_DIR/migraine.1.gz" ]; then
+                        MANPAGE_FILE="migraine.1.gz"
+                    elif [ -f "$MAN1_DIR/migraine.1" ]; then
+                        MANPAGE_FILE="migraine.1"
+                    fi
+                    
+                    if [ -w "$MAN1_DIR" ]; then
+                        ln -sf "$MANPAGE_FILE" "$MAN1_DIR/mgr.1" 2>/dev/null || true
+                    else
+                        sudo ln -sf "$MANPAGE_FILE" "$MAN1_DIR/mgr.1" 2>/dev/null || {
+                            # If sudo fails for link, try user directory
+                            if [[ "$MAN1_DIR" == *"$HOME"* ]]; then
+                                ln -sf "$MANPAGE_FILE" "$MAN1_DIR/mgr.1" 2>/dev/null || true
+                            fi
+                        }
+                    fi
+                    
+                    print_message "$GREEN" "✓ Man page installed successfully!"
+                    print_message "$BLUE" "You can now run: man migraine or man mgr"
+                    
+                    # Add MANPATH to shell config if installed to user directory
+                    if [[ "$MAN1_DIR" == *"$HOME"* ]]; then
                         if ! grep -q "MANPATH.*\\.local.*share.*man" "$HOME/.bashrc" 2>/dev/null && 
                            ! grep -q "MANPATH.*\\.local.*share.*man" "$HOME/.zshrc" 2>/dev/null; then
                             echo "export MANPATH=\\$MANPATH:\\$HOME/.local/share/man" >> "$HOME/.bashrc"
                             echo "export MANPATH=\\$MANPATH:\\$HOME/.local/share/man" >> "$HOME/.zshrc" 2>/dev/null || true
                         fi
                     fi
-                    
-                    print_message "$GREEN" "✓ Man page installed successfully!"
-                    print_message "$BLUE" "You can now run: man migraine or man mgr"
                 fi
             fi
         fi
