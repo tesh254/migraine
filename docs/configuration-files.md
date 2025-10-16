@@ -326,6 +326,85 @@ pre_checks:
     description: "Validate API key is provided"
 ```
 
+### Security Notice for Variables
+⚠️ **IMPORTANT**: The vault currently stores variables in an unencrypted SQLite database. While variables are stored locally, they are not encrypted at rest. We are actively working on adding encryption support in an upcoming release. For now, we recommend avoiding storing highly sensitive information like production API keys in the vault until encryption is implemented.
+
+#### Example: Secure Configuration with Vault Variables
+```yaml
+# migraine.yml with vault variables
+project:
+  name: "Secure Project"
+  description: "Project with encrypted configuration"
+
+defaults:
+  use_vault: true
+
+workflows:
+  deploy:
+    description: "Deploy to environment with secure variables"
+    pre_checks:
+      - command: "[ -n '{{api_token}}' ] || (echo 'API token required' && exit 1)"
+        description: "Validate API token is available"
+      - command: "curl -sf -H 'Authorization: Bearer {{api_token}}' {{api_url}}/health"
+        description: "Check API health with token"
+    steps:
+      - command: "echo 'Deploying to {{environment}} with secure configuration'"
+      - command: "DEPLOY_TOKEN={{api_token}} API_URL={{api_url}} ./deploy-script.sh"
+        description: "Run deployment with secure tokens"
+    
+    # This workflow will resolve variables from the vault:
+    # - api_token (from vault: global, project, or workflow scope)
+    # - api_url (from vault: global, project, or workflow scope)
+    # - environment (from vault or command-line override)
+
+environments:
+  development:
+    variables:
+      api_url: "https://dev-api.com"
+  staging:
+    variables:
+      api_url: "https://staging-api.com"
+  production:
+    variables:
+      api_url: "https://api.com"
+
+# These variables should be set in the vault:
+# $ migraine vars set api_token "your-secure-token" --scope project
+# $ migraine vars set environment "production" --scope project
+# $ migraine vars set notification_email "admin@example.com" --scope global
+```
+
+#### Expected Output with Vault Variables
+When running a workflow that uses vault variables:
+
+```bash
+# Set up vault variables
+$ migraine vars set api_token "secret-token-123" --scope project
+$ migraine vars set environment "staging" --scope project
+$ migraine vars set notification_email "admin@example.com" --scope global
+
+# Run workflow that uses these variables
+$ migraine workflow run deploy
+[Pre-check] Validate API token is available
+[OK] API token validation passed
+[Pre-check] Check API health with token
+[OK] API health check passed
+[Executing] Deploying to staging with secure configuration
+[Executing] Run deployment with secure tokens
+Deployment started at 2024-01-15 10:30:45
+Building application packages...
+Syncing files to server...
+Restarting services...
+Deployment completed successfully
+
+# List all variables to verify storage
+$ migraine vars list
+KEY                 SCOPE      WORKFLOW    VALUE
+api_token           project                secret-token-123
+environment         project                staging
+notification_email  global                 admin@example.com
+```
+
 ### 4. Organize by Functionality
 
 Group related workflows together:

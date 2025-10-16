@@ -158,6 +158,9 @@ Migraine automatically discovers workflow files in:
 
 ## Vault & Variables
 
+### Security Notice
+⚠️ **IMPORTANT**: The current vault implementation stores variables in an unencrypted SQLite database. While the variables are stored locally and not transmitted over networks, they are not encrypted at rest. We are actively working on adding encryption support to the vault system in an upcoming release to enhance security. For now, we recommend avoiding storing highly sensitive information like production API keys in the vault until encryption is implemented.
+
 ### Variable Scopes
 Migraine supports three variable scopes:
 
@@ -168,13 +171,22 @@ Migraine supports three variable scopes:
 ### Setting Variables
 ```bash
 # Set global variable
-migraine vars set api_key "my-secret-key"
+migraine vars set api_key "my-api-key"
 
 # Set project-specific variable
 migraine vars set project_path "/path/to/project" -s project
 
 # Set workflow-specific variable
 migraine vars set workflow_name "my-workflow" -s workflow -w my-workflow
+
+# Example with expected output:
+$ migraine vars set database_url "postgresql://localhost/mydb"
+$ migraine vars list
+Key: database_url
+Scope: global
+Value: postgresql://localhost/mydb
+Created: 2024-01-15 10:30:45
+Updated: 2024-01-15 10:30:45
 ```
 
 ### Using Variables in Workflows
@@ -186,6 +198,86 @@ When `use_vault: true` is set in a workflow:
 When `use_vault: false`:
 - Variables are loaded from environment files (`.env` or workflow-specific files)
 - Prompt for missing variables
+
+### Variable Resolution Order
+When a workflow runs, variables are resolved in this order:
+1. Command-line flags: `migraine run workflow -v var=value`
+2. Workflow scope (in vault)
+3. Project scope (in vault)
+4. Global scope (in vault)
+5. Environment files (`.env`, `./env/[workflow].env`)
+6. Prompt user for missing variables
+
+### Practical Examples
+
+#### Example 1: Storing and Using API Keys
+```bash
+# First, store your API key in the vault
+migraine vars set openai_api_key "sk-..."
+
+# Create a workflow that uses the variable
+# (workflows/ai-request.yaml)
+use_vault: true
+
+steps:
+  - command: "curl -H 'Authorization: Bearer {{openai_api_key}}' https://api.openai.com/v1/models"
+    description: "Fetch available models from OpenAI"
+
+# Expected output when running:
+$ migraine workflow run ai-request
+[Executing] Fetch available models from OpenAI
+{
+  "data": [
+    {"id": "gpt-4", "owned_by": "openai"},
+    {"id": "gpt-3.5-turbo", "owned_by": "openai"}
+  ]
+}
+```
+
+#### Example 2: Multi-Environment Variables
+```bash
+# Set different database URLs for different environments
+migraine vars set db_url "postgresql://dev-server/myapp_dev" -s project
+migraine vars set api_endpoint "https://dev-api.example.com" -s project
+
+# In your workflow file:
+use_vault: true
+
+steps:
+  - command: "echo 'Connecting to: {{api_endpoint}}'"
+  - command: "DATABASE_URL={{db_url}} npm run migrate"
+
+# Expected output:
+$ migraine workflow run my-workflow
+[Executing] Connecting to: https://dev-api.example.com
+[Executing] Running migration with DATABASE_URL=postgresql://dev-server/myapp_dev
+Migration completed successfully
+```
+
+#### Example 3: Workflow-Specific Variables
+```bash
+# Set a variable specific to one workflow
+migraine vars set deployment_target "staging-server-01" -s workflow -w deploy-staging
+
+# Workflow file that uses the variable:
+name: deploy-staging
+use_vault: true
+
+steps:
+  - command: "rsync -av ./dist/ {{deployment_target}}:/var/www/"
+    description: "Deploy to staging server"
+
+# Expected output:
+$ migraine workflow run deploy-staging
+[Executing] Deploy to staging server
+building file list ... done
+dist/
+dist/app.js
+dist/index.html
+
+sent 123456 bytes  received 456 bytes  7890.12 bytes/sec
+total size is 123000  speedup is 1.00
+```
 
 ## Comparison with Other Tools
 

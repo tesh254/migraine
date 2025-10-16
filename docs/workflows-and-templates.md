@@ -115,6 +115,9 @@ use_vault: true
 
 ### Variable Handling
 
+#### Security Notice
+⚠️ **IMPORTANT**: The vault currently stores variables in an unencrypted SQLite database. While variables are stored locally, they are not encrypted at rest. We are actively working on adding encryption support in an upcoming release. For now, we recommend avoiding storing highly sensitive information like production API keys in the vault until encryption is implemented.
+
 #### In Workflows
 Variables in workflows use the `{{variable_name}}` syntax:
 
@@ -135,6 +138,93 @@ When a workflow is executed, Migraine resolves variables in this order:
 4. **Global scope** (in vault): Available to all workflows
 5. **Environment files**: `.env`, `./env/[workflow].env`
 6. **Prompt user**: If no value is found
+
+#### Practical Examples with Expected Output
+
+##### Example 1: Basic Variable Substitution
+```yaml
+# workflows/greeting.yaml
+name: greeting
+description: Simple greeting workflow
+use_vault: true
+
+steps:
+  - command: "echo 'Hello, {{user_name}}! Welcome to {{project_name}}.'"
+    description: "Print personalized greeting"
+
+# Assuming these variables are stored in the vault:
+# migraine vars set user_name "Alice"
+# migraine vars set project_name "My Project"
+```
+
+Expected output when running:
+```bash
+$ migraine workflow run greeting
+[Executing] Print personalized greeting
+Hello, Alice! Welcome to My Project.
+```
+
+##### Example 2: Environment-Specific Variables
+```yaml
+# workflows/deploy.yaml
+name: deploy
+description: Deploy application to specified environment
+use_vault: true
+
+pre_checks:
+  - command: "ssh -q {{deployment_server}} exit"
+    description: "Check SSH connectivity to deployment server"
+
+steps:
+  - command: "echo 'Deploying {{app_name}} to {{environment}} environment'"
+  - command: "rsync -av ./dist/ {{deployment_user}}@{{deployment_server}}:/var/www/{{app_name}}/"
+    description: "Deploy application files"
+
+# Variables would be stored in vault:
+# migraine vars set deployment_server "prod-server.example.com" -s project
+# migraine vars set deployment_user "deployer" -s project
+# migraine vars set app_name "myapp" -s project
+```
+
+Expected output when running:
+```bash
+$ migraine workflow run deploy
+[Pre-check] Check SSH connectivity to deployment server
+[OK] SSH connectivity verified
+[Executing] Deploying myapp to production environment
+[Executing] Deploy application files
+building file list ... done
+./
+./index.html
+./app.js
+./styles.css
+
+sent 123456 bytes  received 789 bytes  24749.00 bytes/sec
+total size is 122000  speedup is 1.01
+```
+
+##### Example 3: Using Command-Line Variable Overrides
+```yaml
+# workflows/backup.yaml
+name: backup
+description: Create database backup
+use_vault: true
+
+steps:
+  - command: "pg_dump -h {{db_host}} -U {{db_user}} {{db_name}} > backup_{{timestamp}}.sql"
+    description: "Create database backup"
+```
+
+Expected output with command-line override:
+```bash
+$ migraine workflow run backup -v db_host="backup-server" -v timestamp="20240115_1030"
+[Executing] Create database backup
+pg_dump: processing data for table public.users
+pg_dump: processing data for table public.orders
+pg_dump: processing data for table public.products
+pg_dump: processing data for table public.settings
+pg_dump: creating backup_20240115_1030.sql
+```
 
 ### Creating Workflows
 

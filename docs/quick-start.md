@@ -120,6 +120,9 @@ migraine workflow init deploy -d "Deploy to production"
 
 ## Variable Management
 
+### Security Notice
+⚠️ **IMPORTANT**: The vault currently stores variables in an unencrypted SQLite database. While variables are stored locally, they are not encrypted at rest. We are actively working on adding encryption support in an upcoming release. For now, we recommend avoiding storing highly sensitive information like production API keys in the vault until encryption is implemented.
+
 ### 1. Store a Variable in the Vault
 ```bash
 migraine vars set api_key "your-api-key-here"
@@ -143,6 +146,59 @@ steps:
 ### 4. Run with Specific Variables
 ```bash
 migraine workflow run my-workflow -v env=production -v server=prod-server
+```
+
+### 5. Practical Examples with Expected Output
+
+#### Example: Setting and Using Variables
+```bash
+# Store a variable
+$ migraine vars set project_name "my-awesome-project"
+Variable 'project_name' stored successfully with scope 'global'
+
+# List all variables
+$ migraine vars list
+KEY             SCOPE      WORKFLOW    VALUE
+project_name    global                 my-awesome-project
+
+# Create a workflow that uses the variable
+# (workflows/greet.yaml)
+name: greet
+use_vault: true
+
+steps:
+  - command: "echo 'Hello from {{project_name}}!'"
+    description: "Greet with project name"
+
+# Run the workflow
+$ migraine workflow run greet
+[Executing] Greet with project name
+Hello from my-awesome-project!
+
+# Run with override variable
+$ migraine workflow run greet -v project_name="different-project"
+[Executing] Greet with project name
+Hello from different-project!
+```
+
+#### Example: Multi-Environment Variables
+```bash
+# Set different environment variables
+$ migraine vars set api_url "https://dev-api.example.com" -s project
+$ migraine vars set api_url "https://staging-api.example.com" -s project
+
+# Workflow file (workflows/test-api.yaml)
+name: test-api
+use_vault: true
+
+steps:
+  - command: "curl -X GET {{api_url}}/health"
+    description: "Test API health endpoint"
+
+# Run with the project-scoped variable
+$ migraine workflow run test-api
+[Executing] Test API health endpoint
+{"status": "healthy", "timestamp": "2024-01-15T10:30:45Z"}
 ```
 
 ## Advanced Quick Examples

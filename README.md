@@ -8,4 +8,7 @@ This is a robust CLI tool used to organize and automate complex workflows with t
 
 > We recommend reading the docs details on (migraine docs)[https://migraine.wchr.xyz]. They will always be up to date but we will update the readme soon on basic info
 
+### Security Notice
+⚠️ **IMPORTANT**: The vault currently stores variables in an unencrypted SQLite database. While variables are stored locally, they are not encrypted at rest. We are actively working on adding encryption support in an upcoming release. For now, we recommend avoiding storing highly sensitive information like production API keys in the vault until encryption is implemented.
+
 For any other issues, please check our [issue tracker](https://github.com/tesh254/migraine/issues) or submit a new issue.

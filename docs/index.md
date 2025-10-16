@@ -24,10 +24,13 @@ Migraine is a modern command-line tool for organizing and automating complex wor
 
 ### Key Features
 - **YAML-based workflows** with comprehensive documentation
-- **Vault-backed variable management** with scope awareness
+- **Vault-backed variable management** with scope awareness (global, project, workflow)
 - **File-based workflow discovery** in the current working directory  
 - **Template scaffolding** with commented examples
 - **Migration capabilities** from legacy formats
+
+### Security Notice
+⚠️ **IMPORTANT**: The vault currently stores variables in an unencrypted SQLite database. While variables are stored locally, they are not encrypted at rest. We are actively working on adding encryption support in an upcoming release. For now, we recommend avoiding storing highly sensitive information like production API keys in the vault until encryption is implemented.
 
 ## Quick Navigation
 
