@@ -69,13 +69,44 @@ func ExecuteCommand(command string) error {
 
 	fmt.Fprint(os.Stdout, colorGray+fontSmall)
 
-	_, err = io.Copy(os.Stdout, ptmx)
+	// Create channels to handle both directions of data flow
+	stdoutErrCh := make(chan error, 1)
+	stdinErrCh := make(chan error, 1)
+
+	// Copy pty output to stdout
+	go func() {
+		_, err := io.Copy(os.Stdout, ptmx)
+		stdoutErrCh <- err
+	}()
+
+	// Copy stdin to pty input
+	go func() {
+		_, err := io.Copy(ptmx, os.Stdin)
+		stdinErrCh <- err
+	}()
+
+	// Wait for command to finish
+	err = cmd.Wait()
+
+	// Close the PTY to terminate the copying goroutines
+	_ = ptmx.Close()
+
+	// Wait for copying to complete and capture errors
+	stdoutErr := <-stdoutErrCh
+	stdinErr := <-stdinErrCh
 
 	fmt.Fprint(os.Stdout, resetCodes)
 
+	// Return the first error encountered or nil if no error
 	if err != nil {
 		return err
 	}
+	if stdoutErr != nil {
+		return stdoutErr
+	}
+	if stdinErr != nil {
+		return stdinErr
+	}
 
-	return cmd.Wait()
+	return nil
 }
