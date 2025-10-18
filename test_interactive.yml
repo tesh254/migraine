@@ -1,0 +1,19 @@
+name: "Interactive Test Workflow"
+description: "A workflow to test interactive command execution"
+config:
+  variables: {}
+  store_variables: false
+
+pre_checks: []
+
+steps:
+  - command: "read -p 'Enter your name: ' name && echo \"Hello, $name!\""
+    description: "Prompts for name and greets the user"
+  
+  - command: "read -p 'Continue? (y/n): ' answer && if [ \"$answer\" = \"y\" ] || [ \"$answer\" = \"Y\" ]; then echo \"Continuing...\"; else echo \"Exiting...\"; fi"
+    description: "Prompts for yes/no and acts accordingly"
+
+actions:
+  password_test:
+    command: "read -s -p 'Enter password: ' password && echo && echo \"Password length: ${#password}\""
+    description: "Tests password input (hidden characters)"
