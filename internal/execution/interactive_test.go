@@ -2,6 +2,7 @@ package execution
 
 import (
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -83,6 +84,10 @@ func TestExecuteCommandWithPtyDirectly(t *testing.T) {
 
 // TestExecuteCommandBasic still tests basic functionality
 func TestExecuteCommandBasic(t *testing.T) {
+	if os.Getenv("CI") == "true" {
+		t.Skip("Skipping pty test on CI environment")
+	}
+	
 	// Test that non-interactive commands still work
 	cmdStr := "echo 'hello world'"
 	
