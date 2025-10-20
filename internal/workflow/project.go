@@ -162,7 +162,7 @@ func UpsertProjectWorkflowToDB(yamlWf *YAMLWorkflow, storage *sqlite.StorageServ
 			// If we can't get absolute path, use the relative one
 			absDir = dir
 		}
-		
+
 		// Create or update the WORKING_DIR vault entry for this workflow
 		workingDirEntry := sqlite.VaultEntry{
 			Key:        "WORKING_DIR",
@@ -172,7 +172,7 @@ func UpsertProjectWorkflowToDB(yamlWf *YAMLWorkflow, storage *sqlite.StorageServ
 			CreatedAt:  time.Now(),
 			UpdatedAt:  time.Now(),
 		}
-		
+
 		// Check if a WORKING_DIR entry already exists for this workflow
 		existingEntry, err := storage.VaultStore().GetVariable("WORKING_DIR", "workflow", &yamlWf.Name)
 		if err == nil && existingEntry != nil {

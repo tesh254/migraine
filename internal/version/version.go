@@ -140,9 +140,9 @@ func GetBuildInfo() BuildInfo {
 	}
 
 	// Update GitTag if we have proper VCS information and the version looks like a Git tag
-	if info.GitTag == "unknown" && hasVCSInfo && buildInfo.Main.Version != "" && 
-	   buildInfo.Main.Version != "(devel)" && 
-	   strings.HasPrefix(buildInfo.Main.Version, "v") {
+	if info.GitTag == "unknown" && hasVCSInfo && buildInfo.Main.Version != "" &&
+		buildInfo.Main.Version != "(devel)" &&
+		strings.HasPrefix(buildInfo.Main.Version, "v") {
 		// Use the module version (which should reflect the Git tag when built at a tag)
 		info.GitTag = buildInfo.Main.Version
 	}
