@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/tesh254/migraine/internal/editor"
 	"github.com/tesh254/migraine/internal/workflow"
 )
 
@@ -20,46 +22,44 @@ var workflowInitCmd = &cobra.Command{
 	
 Use without arguments to create a project configuration file (migraine.yml).
 Use with --yml or --json flags to create project config files directly.
-Use with a name to create a regular workflow in the workflows/ directory.`,
+Use with a name to create a regular workflow in the workflows/ directory.
+Use with --editor to configure editor LSP integration instead.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		editorFlag, _ := cmd.Flags().GetString("editor")
+		if editorFlag != "" {
+			return runEditorSetup(cmd, editorFlag)
+		}
+
 		name := ""
 		if len(args) > 0 {
 			name = args[0]
 		}
 
-		// Check if --yml or --json flags are used
 		generateYML, _ := cmd.Flags().GetBool("yml")
 		generateJSON, _ := cmd.Flags().GetBool("json")
 
 		if generateYML || generateJSON {
-			// Generate project configuration file
 			format := "yaml"
 			if generateJSON {
 				format = "json"
 			}
-
-			// Get description from flag or use default
 			description, _ := cmd.Flags().GetString("description")
 			if description == "" {
 				description = "Project-level workflow configuration"
 			}
-
 			return workflow.ScaffoldProjectConfig(format, description)
 		} else if name == "" {
-			// No name provided and no format flags, generate default YAML config
 			description, _ := cmd.Flags().GetString("description")
 			if description == "" {
 				description = "Project-level workflow configuration"
 			}
 			return workflow.ScaffoldProjectConfig("yaml", description)
 		} else {
-			// Regular workflow with name, generate in workflows/ directory
 			description, _ := cmd.Flags().GetString("description")
 			if description == "" {
 				description = name
 			}
-
 			return workflow.ScaffoldYAMLWorkflow(name, description)
 		}
 	},
@@ -141,61 +141,89 @@ func init() {
 	workflowInitCmd.Flags().StringP("description", "d", "", "Description for the workflow")
 	workflowInitCmd.Flags().Bool("yml", false, "Generate project configuration file as migraine.yml")
 	workflowInitCmd.Flags().Bool("json", false, "Generate project configuration file as migraine.json")
+	workflowInitCmd.Flags().StringP("editor", "e", "", "Configure editor LSP integration (vscode, neovim, vim, helix)")
 	workflowPreChecksCmd.Flags().StringArrayP("var", "v", []string{}, "Variables in KEY=VALUE format")
 }
 
 // Create a top-level init command as an alias to workflow init
 var initCmd = &cobra.Command{
 	Use:   "init [name]",
-	Short: "Create a new workflow file with commented sections (alias for workflow init)",
+	Short: "Create a new workflow file or configure editor integration",
 	Long: `Create a new workflow file with commented sections.
 	
 Use without arguments to create a project configuration file (migraine.yml).
 Use with --yml or --json flags to create project config files directly.
-Use with a name to create a regular workflow in the workflows/ directory.`,
+Use with a name to create a regular workflow in the workflows/ directory.
+Use with --editor to configure editor LSP integration (vscode, neovim, vim, helix).`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Call the same logic as workflow init
+		editorFlag, _ := cmd.Flags().GetString("editor")
+		if editorFlag != "" {
+			return runEditorSetup(cmd, editorFlag)
+		}
+
 		name := ""
 		if len(args) > 0 {
 			name = args[0]
 		}
 
-		// Check if --yml or --json flags are used
 		generateYML, _ := cmd.Flags().GetBool("yml")
 		generateJSON, _ := cmd.Flags().GetBool("json")
 
 		if generateYML || generateJSON {
-			// Generate project configuration file
 			format := "yaml"
 			if generateJSON {
 				format = "json"
 			}
-
-			// Get description from flag or use default
 			description, _ := cmd.Flags().GetString("description")
 			if description == "" {
 				description = "Project-level workflow configuration"
 			}
-
 			return workflow.ScaffoldProjectConfig(format, description)
 		} else if name == "" {
-			// No name provided and no format flags, generate default YAML config
 			description, _ := cmd.Flags().GetString("description")
 			if description == "" {
 				description = "Project-level workflow configuration"
 			}
 			return workflow.ScaffoldProjectConfig("yaml", description)
 		} else {
-			// Regular workflow with name, generate in workflows/ directory
 			description, _ := cmd.Flags().GetString("description")
 			if description == "" {
 				description = name
 			}
-
 			return workflow.ScaffoldYAMLWorkflow(name, description)
 		}
 	},
+}
+
+func runEditorSetup(cmd *cobra.Command, editorFlag string) error {
+	if editorFlag == "auto" || editorFlag == "detect" {
+		detected := editor.Detect()
+		if len(detected) == 0 {
+			fmt.Println("No supported editors detected.")
+			fmt.Printf("Supported editors: %s\n", strings.Join(editor.Supported(), ", "))
+			fmt.Println("Use --editor <name> to configure a specific editor.")
+			return nil
+		}
+		fmt.Printf("Detected editors: %s\n\n", strings.Join(detected, ", "))
+		for _, e := range detected {
+			fmt.Printf("Configuring %s...\n", e)
+			if err := editor.Setup(e, ""); err != nil {
+				fmt.Printf("  ✗ %v\n", err)
+			} else {
+				fmt.Printf("  ✓ %s configured\n", e)
+			}
+		}
+		return nil
+	}
+
+	fmt.Printf("Configuring %s...\n", editorFlag)
+	if err := editor.Setup(editorFlag, ""); err != nil {
+		return err
+	}
+	fmt.Printf("  ✓ %s configured\n", editorFlag)
+	fmt.Println("\nDone! Open a .mg file in your editor to get started.")
+	return nil
 }
 
 func init() {
@@ -203,13 +231,14 @@ func init() {
 	initCmd.Flags().StringP("description", "d", "", "Description for the workflow")
 	initCmd.Flags().Bool("yml", false, "Generate project configuration file as migraine.yml")
 	initCmd.Flags().Bool("json", false, "Generate project configuration file as migraine.json")
+	initCmd.Flags().StringP("editor", "e", "", "Configure editor LSP (vscode, neovim, vim, helix, or 'auto' to detect)")
 
 	// Add flags to workflow run command
 	workflowRunCmd.Flags().StringArrayP("var", "v", []string{}, "Variables in KEY=VALUE format")
 	workflowRunCmd.Flags().StringArrayP("action", "a", []string{}, "Action to run")
 
 	// Add commands
-	rootCmd.AddCommand(initCmd) // Add top-level init command
+	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(workflowCmd)
 	workflowCmd.AddCommand(workflowInitCmd)
 	workflowCmd.AddCommand(workflowListCmd)

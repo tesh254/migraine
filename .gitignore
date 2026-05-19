@@ -26,3 +26,7 @@ go.work
 *.sample.json
 workflow_template.json
 .vscode/
+Migraine
+editors/vscode/node_modules/
+editors/vscode/dist/
+editors/vscode/*.vsix

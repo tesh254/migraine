@@ -1,0 +1,90 @@
+{
+  "name": "migraine-lsp",
+  "displayName": "Migraine Workflow Language",
+  "description": "Language support for .mg (Migraine) workflow files — syntax highlighting, diagnostics, completion, and hover docs via LSP.",
+  "version": "0.1.0",
+  "publisher": "tesh254",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tesh254/migraine"
+  },
+  "icon": "images/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "keywords": [
+    "migraine",
+    "workflow",
+    "lsp",
+    "mg"
+  ],
+  "activationEvents": [
+    "onLanguage:migraine"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "migraine",
+        "aliases": [
+          "Migraine Workflow",
+          "migraine"
+        ],
+        "extensions": [
+          ".mg"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "migraine",
+        "scopeName": "source.mg",
+        "path": "./syntaxes/migraine.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Migraine LSP",
+      "properties": {
+        "migraine.lsp.path": {
+          "type": "string",
+          "default": "migraine",
+          "description": "Path to the migraine binary (must have 'lsp' subcommand)"
+        },
+        "migraine.lsp.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the Migraine LSP server"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "migraine.restartLsp",
+        "title": "Migraine: Restart Language Server"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run build",
+    "build": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "watch": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --watch",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.0",
+    "vscode-languageclient": "^9.0.1"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}

@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/tesh254/migraine/internal/storage/sqlite"
 	"gopkg.in/yaml.v3"
@@ -16,12 +15,17 @@ import (
 type YAMLStep struct {
 	Command     string  `yaml:"command" json:"command"`
 	Description *string `yaml:"description,omitempty" json:"description,omitempty"`
+	OnFail      string  `yaml:"on_fail,omitempty" json:"on_fail,omitempty"`
+	OnSuccess   string  `yaml:"on_success,omitempty" json:"on_success,omitempty"`
 }
 
 // YAMLConfig represents configuration for a YAML workflow
 type YAMLConfig struct {
 	Variables      map[string]interface{} `yaml:"variables,omitempty" json:"variables,omitempty"`
 	StoreVariables bool                   `yaml:"store_variables,omitempty" json:"store_variables,omitempty"`
+	StoreLogs      bool                   `yaml:"store_logs,omitempty" json:"store_logs,omitempty"`
+	Background     bool                   `yaml:"background,omitempty" json:"background,omitempty"`
+	Global         bool                   `yaml:"global,omitempty" json:"global,omitempty"`
 }
 
 // ProjectConfig represents the structure of migraine.yml or migraine.json
@@ -38,6 +42,11 @@ type ProjectConfig struct {
 
 // LoadProjectWorkflow loads a workflow from migraine.yml or migraine.json in the current directory
 func LoadProjectWorkflow() (*YAMLWorkflow, error) {
+	// Look for Migraine file first
+	if _, err := os.Stat("Migraine"); err == nil {
+		return loadProjectWorkflowFromMigraine("Migraine")
+	}
+
 	// Look for migraine.yml or migraine.json in current directory
 	possibleFiles := []string{"migraine.yml", "migraine.yaml", "migraine.json"}
 
@@ -111,102 +120,76 @@ func loadProjectWorkflowFromJSON(filePath string) (*YAMLWorkflow, error) {
 	return workflow, nil
 }
 
-// UpsertProjectWorkflowToDB upserts the project workflow to the database
-func UpsertProjectWorkflowToDB(yamlWf *YAMLWorkflow, storage *sqlite.StorageService) error {
-	// Convert YAML workflow to internal format
-	internalWf, err := ConvertYAMLToInternal(yamlWf)
+// loadProjectWorkflowFromMigraine loads a workflow from a Migraine file
+func loadProjectWorkflowFromMigraine(filePath string) (*YAMLWorkflow, error) {
+	parser, err := NewMigraineParser(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to convert YAML to internal format: %v", err)
+		return nil, err
 	}
 
-	// Convert internal workflow to the format used by the DB
-	metadata := map[string]interface{}{
-		"pre_checks":  internalWf.PreChecks,
-		"steps":       internalWf.Steps,
-		"actions":     internalWf.Actions,
-		"config":      internalWf.Config,
-		"description": internalWf.Description,
-	}
-
-	// Create the workflow record
-	newWorkflow := sqlite.Workflow{
-		ID:       yamlWf.Name, // Use the name as the ID
-		Name:     yamlWf.Name,
-		Path:     yamlWf.Path,
-		UseVault: yamlWf.UseVault,
-		Metadata: metadata, // Store as the map for the DB
-	}
-
-	// Check if workflow already exists in DB
-	_, err = storage.WorkflowStore().GetWorkflow(yamlWf.Name)
+	wf, err := parser.Parse()
 	if err != nil {
-		// If not found, create new workflow
-		err = storage.WorkflowStore().CreateWorkflow(newWorkflow)
-		if err != nil {
-			return err
-		}
-	} else {
-		// If found, update existing workflow
-		err = storage.WorkflowStore().UpdateWorkflow(newWorkflow)
-		if err != nil {
-			return err
-		}
+		return nil, err
 	}
 
-	// Store the working directory as a vault entry
-	if yamlWf.Path != "" {
-		// Extract directory from the path and convert to absolute path
-		dir := filepath.Dir(yamlWf.Path)
-		absDir, err := filepath.Abs(dir)
-		if err != nil {
-			// If we can't get absolute path, use the relative one
-			absDir = dir
-		}
+	yamlWf := ConvertInternalToYAML(wf, "")
+	yamlWf.Path = filePath
 
-		// Create or update the WORKING_DIR vault entry for this workflow
-		workingDirEntry := sqlite.VaultEntry{
-			Key:        "WORKING_DIR",
-			Value:      absDir,
-			Scope:      "workflow",
-			WorkflowID: &yamlWf.Name,
-			CreatedAt:  time.Now(),
-			UpdatedAt:  time.Now(),
-		}
+	return yamlWf, nil
+}
 
-		// Check if a WORKING_DIR entry already exists for this workflow
-		existingEntry, err := storage.VaultStore().GetVariable("WORKING_DIR", "workflow", &yamlWf.Name)
-		if err == nil && existingEntry != nil {
-			// Entry exists, update it
-			err = storage.VaultStore().UpdateVariable("WORKING_DIR", "workflow", &yamlWf.Name, absDir)
-			if err != nil {
-				// Log the error but don't fail the entire operation
-				fmt.Printf("Warning: failed to update WORKING_DIR vault entry: %v\n", err)
-			}
-		} else {
-			// Entry doesn't exist, create it
-			err = storage.VaultStore().CreateVariable(workingDirEntry)
-			if err != nil {
-				// Log the error but don't fail the entire operation
-				fmt.Printf("Warning: failed to create WORKING_DIR vault entry: %v\n", err)
-			}
-		}
+// ValidateWorkflowName checks if the workflow name is valid
+func ValidateWorkflowName(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("workflow name cannot be empty")
 	}
-
+	// Add more validation if needed
 	return nil
 }
 
-// ValidateWorkflowName checks if the workflow name is a valid slug
-func ValidateWorkflowName(name string) error {
-	if name == "" {
-		return fmt.Errorf("workflow name cannot be empty")
+// UpsertProjectWorkflowToDB upserts the project workflow to the database
+func UpsertProjectWorkflowToDB(wf *YAMLWorkflow, storage *sqlite.StorageService) error {
+	// Reconstruct ProjectConfig to use as metadata
+	config := ProjectConfig{
+		Name:        wf.Name,
+		Description: wf.Description,
+		PreChecks:   wf.PreChecks,
+		Steps:       wf.Steps,
+		Actions:     wf.Actions,
+		Config:      wf.Config,
+		UseVault:    wf.UseVault,
 	}
 
-	// Check if name is a valid slug (alphanumeric, hyphens, underscores)
-	for _, r := range name {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-') {
-			return fmt.Errorf("workflow name '%s' contains invalid characters, only alphanumeric, hyphens, and underscores are allowed", name)
-		}
+	// Convert to map for metadata
+	configBytes, err := json.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal project config: %v", err)
 	}
 
-	return nil
+	var metadata map[string]interface{}
+	if err := json.Unmarshal(configBytes, &metadata); err != nil {
+		return fmt.Errorf("failed to unmarshal project config: %v", err)
+	}
+
+	// Create DB workflow structure
+	// We use the workflow name as the ID for project workflows to ensure uniqueness
+	// and to make it easy to look up.
+	dbWf := sqlite.Workflow{
+		ID:       wf.Name,
+		Name:     wf.Name,
+		Path:     wf.Path,
+		UseVault: wf.UseVault,
+		Metadata: metadata,
+	}
+
+	// Check if workflow exists in DB
+	existing, err := storage.WorkflowStore().GetWorkflow(wf.Name)
+	if err == nil && existing != nil {
+		// Update existing workflow
+		dbWf.ID = existing.ID // Keep existing ID if different (though we set it to name above)
+		return storage.WorkflowStore().UpdateWorkflow(dbWf)
+	}
+
+	// Create new workflow
+	return storage.WorkflowStore().CreateWorkflow(dbWf)
 }

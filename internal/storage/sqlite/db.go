@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
-type DBService struct {
+type DBService struct{
 	db   *sql.DB
 	path string
 }
@@ -29,7 +29,7 @@ func NewDBService(appName string) (*DBService, error) {
 	// Full path to the SQLite file
 	dbFilePath := filepath.Join(dbPath, "migraine.db")
 
-	db, err := sql.Open("sqlite3", dbFilePath)
+	db, err := sql.Open("sqlite", dbFilePath)
 	if err != nil {
 		return nil, err
 	}

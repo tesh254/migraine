@@ -21,8 +21,34 @@ func NewVariableResolver(storage *sqlite.StorageService) *VariableResolver {
 }
 
 // ResolveVariables resolves all variables for a workflow based on its configuration
-func (vr *VariableResolver) ResolveVariables(workflowID string, workflowUseVault bool, flags map[string]string) (map[string]string, error) {
+func (vr *VariableResolver) ResolveVariables(workflowID string, workflowUseVault bool, flags map[string]string, configVariables map[string]interface{}) (map[string]string, error) {
 	variables := make(map[string]string)
+
+	// Process config variables first
+	for key, val := range configVariables {
+		if s, ok := val.(string); ok {
+			if strings.HasPrefix(s, "args:") {
+				argName := strings.TrimPrefix(s, "args:")
+				if v, ok := flags[argName]; ok {
+					variables[key] = v
+				}
+			} else if strings.HasPrefix(s, "env:") {
+				envName := strings.TrimPrefix(s, "env:")
+				if v := os.Getenv(envName); v != "" {
+					variables[key] = v
+				}
+			} else if strings.HasPrefix(s, "vault:") {
+				// Handled below if using vault, but we can also handle it here if specific key is requested
+				// For now let's assume vault variables are loaded separately
+			} else {
+				// Static string value
+				variables[key] = s
+			}
+		} else {
+			// Non-string value (e.g. bool, number), convert to string
+			variables[key] = fmt.Sprintf("%v", val)
+		}
+	}
 
 	// First, use any variables provided via command line flags
 	for k, v := range flags {
