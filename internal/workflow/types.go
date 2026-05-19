@@ -3,11 +3,16 @@ package workflow
 type Atom struct {
 	Command     string  `json:"command"`
 	Description *string `json:"description"`
+	OnFail      string  `json:"on_fail,omitempty"`
+	OnSuccess   string  `json:"on_success,omitempty"`
 }
 
 type Config struct {
 	Variables      map[string]interface{} `json:"variables"`
 	StoreVariables bool                   `json:"store_variables"`
+	StoreLogs      bool                   `json:"store_logs"`
+	Background     bool                   `json:"background"`
+	Global         bool                   `json:"global"`
 }
 
 type Workflow struct {

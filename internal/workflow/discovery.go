@@ -36,6 +36,17 @@ func DiscoverWorkflowsFromCWD() ([]YAMLWorkflow, error) {
 
 			allWorkflows = append(allWorkflows, *workflow)
 		}
+
+		// Check for Migraine file
+		migraineFile := filepath.Join(dir, "Migraine")
+		if _, err := os.Stat(migraineFile); err == nil {
+			workflow, err := loadProjectWorkflowFromMigraine(migraineFile)
+			if err != nil {
+				fmt.Printf("Warning: failed to load workflow from %s: %v\n", migraineFile, err)
+			} else {
+				allWorkflows = append(allWorkflows, *workflow)
+			}
+		}
 	}
 
 	return allWorkflows, nil

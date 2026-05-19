@@ -28,55 +28,47 @@ func handleListWorkflows() {
 	// List workflows from current directory
 	fsWorkflows, err := workflow.DiscoverWorkflowsFromCWD()
 	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to discover file-based workflows: %v", err))
-		// Continue with just DB workflows
+		utils.LogError(fmt.Sprintf("Failed to list local workflows: %v", err))
+		// Continue even if local discovery fails
 	}
 
-	fmt.Printf("\n%sAvailable Workflows:%s\n\n", utils.BOLD, utils.RESET)
+	if len(dbWorkflows) == 0 && len(fsWorkflows) == 0 {
+		fmt.Println("No workflows found.")
+		return
+	}
 
-	// Print database workflows
 	if len(dbWorkflows) > 0 {
-		fmt.Printf("%sDatabase Workflows:%s\n", utils.BOLD, utils.RESET)
-		for i, wf := range dbWorkflows {
-			fmt.Printf("%d. (%s%s%s) %s\n", i+1, utils.BOLD, wf.ID, utils.RESET, wf.Name)
+		ui.SectionHeader("DATABASE WORKFLOWS")
+		for _, wf := range dbWorkflows {
+			// Extract description from metadata if possible
+			desc := "No description"
+			if wf.Metadata != nil {
+				if d, ok := wf.Metadata["description"].(string); ok {
+					desc = d
+				}
+			}
 
-			// Parse the metadata to get more details
-			// For now, we'll just show basic info
-			fmt.Printf("   Source: Database\n")
-			fmt.Printf("   Use Vault: %t\n", wf.UseVault)
+			fmt.Printf("  • %s - %s\n", wf.Name, desc)
+			if wf.UseVault {
+				fmt.Printf("    (uses vault)\n")
+			}
 			fmt.Println()
 		}
 	}
 
-	// Print file system workflows
 	if len(fsWorkflows) > 0 {
-		if len(dbWorkflows) > 0 {
-			fmt.Printf("\n%sFile-based Workflows:%s\n", utils.BOLD, utils.RESET)
-		}
-
-		for i, wf := range fsWorkflows {
-			fmt.Printf("%d. %s\n", i+1+len(dbWorkflows), wf.Name)
+		ui.SectionHeader("LOCAL WORKFLOWS")
+		for _, wf := range fsWorkflows {
+			desc := "No description"
 			if wf.Description != nil {
-				fmt.Printf("   Description: %s\n", *wf.Description)
+				desc = *wf.Description
 			}
-			fmt.Printf("   Source: %s\n", wf.Path)
-			fmt.Printf("   Use Vault: %t\n", wf.UseVault)
-
-			// Show required variables
-			allContent := ""
-			for _, step := range wf.Steps {
-				allContent += step.Command + "\n"
+			fmt.Printf("  • %s - %s\n", wf.Name, desc)
+			if wf.UseVault {
+				fmt.Printf("    (uses vault)\n")
 			}
-			for _, check := range wf.PreChecks {
-				allContent += check.Command + "\n"
-			}
-			for name, action := range wf.Actions {
-				allContent += fmt.Sprintf("%s: %s\n", name, action.Command)
-			}
-
-			variables := utils.ExtractTemplateVars(allContent)
-			if len(variables) > 0 {
-				fmt.Printf("   Required Variables: %s\n", strings.Join(variables, ", "))
+			if wf.Path != "" {
+				fmt.Printf("    Path: %s\n", wf.Path)
 			}
 
 			fmt.Println()
@@ -150,14 +142,23 @@ func handleRunWorkflowV2(workflowName string, cmd *cobra.Command) {
 
 	// Determine workflow ID based on which workflow type we're using
 	var workflowID string
+	var configVariables map[string]interface{}
+
 	if dbErr == nil {
 		workflowID = dbWf.ID
+		// Try to extract config variables from metadata if possible
+		var config workflow.ProjectConfig
+		metadataBytes, _ := json.Marshal(dbWf.Metadata)
+		if err := json.Unmarshal(metadataBytes, &config); err == nil {
+			configVariables = config.Config.Variables
+		}
 	} else {
 		workflowID = workflowName
+		configVariables = fsWf.Config.Variables
 	}
 
 	// Resolve variables based on workflow configuration
-	resolvedVars, err := varResolver.ResolveVariables(workflowID, useVault, variables)
+	resolvedVars, err := varResolver.ResolveVariables(workflowID, useVault, variables, configVariables)
 	if err != nil {
 		utils.LogError(fmt.Sprintf("Failed to resolve variables: %v", err))
 		os.Exit(1)
@@ -238,12 +239,28 @@ func executeDBWorkflow(dbWf *sqlite.Workflow, variables map[string]string) {
 		if err != nil {
 			ui.PrecheckResult(*check.Description, "fail", duration, "")
 			ui.LogErrorBordered(fmt.Sprintf("Pre-check %d failed: %v", i+1, err))
+
+			// Run on_fail hook if present
+			if check.OnFail != "" {
+				if hookErr := executeHook(check.OnFail, config.Actions, variables, varResolver); hookErr != nil {
+					ui.LogErrorBordered(fmt.Sprintf("Pre-check %d on_fail hook failed: %v", i+1, hookErr))
+				}
+			}
+
 			prechecksFailed++
 			os.Exit(1)
 		} else {
 			ui.PrecheckResult(*check.Description, "ok", duration, "")
 			prechecksPassed++
 			ui.LogInfoBordered("Pre-check completed successfully")
+
+			// Run on_success hook if present
+			if check.OnSuccess != "" {
+				if hookErr := executeHook(check.OnSuccess, config.Actions, variables, varResolver); hookErr != nil {
+					ui.LogErrorBordered(fmt.Sprintf("Pre-check %d on_success hook failed: %v", i+1, hookErr))
+					os.Exit(1)
+				}
+			}
 		}
 	}
 
@@ -267,9 +284,25 @@ func executeDBWorkflow(dbWf *sqlite.Workflow, variables map[string]string) {
 
 		if err != nil {
 			ui.LogErrorBordered(fmt.Sprintf("Step %d failed: %v", i+1, err))
+
+			// Run on_fail hook if present
+			if step.OnFail != "" {
+				if hookErr := executeHook(step.OnFail, config.Actions, variables, varResolver); hookErr != nil {
+					ui.LogErrorBordered(fmt.Sprintf("Step %d on_fail hook failed: %v", i+1, hookErr))
+				}
+			}
+
 			os.Exit(1)
 		}
 		ui.LogInfoBordered("Step completed successfully")
+
+		// Run on_success hook if present
+		if step.OnSuccess != "" {
+			if hookErr := executeHook(step.OnSuccess, config.Actions, variables, varResolver); hookErr != nil {
+				ui.LogErrorBordered(fmt.Sprintf("Step %d on_success hook failed: %v", i+1, hookErr))
+				os.Exit(1)
+			}
+		}
 	}
 
 	// Display summary
@@ -312,12 +345,28 @@ func executeYAMLWorkflow(yamlWf *workflow.YAMLWorkflow, variables map[string]str
 		if err != nil {
 			ui.PrecheckResult(*check.Description, "fail", duration, "")
 			ui.LogErrorBordered(fmt.Sprintf("Pre-check %d failed: %v", i+1, err))
+
+			// Run on_fail hook if present
+			if check.OnFail != "" {
+				if hookErr := executeHook(check.OnFail, yamlWf.Actions, variables, varResolver); hookErr != nil {
+					ui.LogErrorBordered(fmt.Sprintf("Pre-check %d on_fail hook failed: %v", i+1, hookErr))
+				}
+			}
+
 			prechecksFailed++
 			os.Exit(1)
 		} else {
 			ui.PrecheckResult(*check.Description, "ok", duration, "")
 			prechecksPassed++
 			ui.LogInfoBordered("Pre-check completed successfully")
+
+			// Run on_success hook if present
+			if check.OnSuccess != "" {
+				if hookErr := executeHook(check.OnSuccess, yamlWf.Actions, variables, varResolver); hookErr != nil {
+					ui.LogErrorBordered(fmt.Sprintf("Pre-check %d on_success hook failed: %v", i+1, hookErr))
+					os.Exit(1)
+				}
+			}
 		}
 	}
 
@@ -342,9 +391,25 @@ func executeYAMLWorkflow(yamlWf *workflow.YAMLWorkflow, variables map[string]str
 
 		if err != nil {
 			utils.LogError(fmt.Sprintf("Step %d failed: %v", i+1, err))
+
+			// Run on_fail hook if present
+			if step.OnFail != "" {
+				if hookErr := executeHook(step.OnFail, yamlWf.Actions, variables, varResolver); hookErr != nil {
+					ui.LogErrorBordered(fmt.Sprintf("Step %d on_fail hook failed: %v", i+1, hookErr))
+				}
+			}
+
 			os.Exit(1)
 		}
 		utils.LogInfo("Step completed successfully")
+
+		// Run on_success hook if present
+		if step.OnSuccess != "" {
+			if hookErr := executeHook(step.OnSuccess, yamlWf.Actions, variables, varResolver); hookErr != nil {
+				ui.LogErrorBordered(fmt.Sprintf("Step %d on_success hook failed: %v", i+1, hookErr))
+				os.Exit(1)
+			}
+		}
 	}
 
 	// Display summary
@@ -400,11 +465,46 @@ func handleRunProjectWorkflow(cmd *cobra.Command) {
 	// Create variable resolver
 	varResolver := workflow.NewVariableResolver(storage)
 
+	// Determine workflow ID (for project workflow, use name as ID for variable resolution)
+	workflowID := projWf.Name
+
 	// Resolve variables based on workflow configuration
-	resolvedVars, err := varResolver.ResolveVariables(projWf.Name, projWf.UseVault, variables)
+	resolvedVars, err := varResolver.ResolveVariables(workflowID, projWf.UseVault, variables, projWf.Config.Variables)
 	if err != nil {
 		utils.LogError(fmt.Sprintf("Failed to resolve variables: %v", err))
 		os.Exit(1)
+	}
+
+	// If there are still missing variables, prompt for them if not using vault
+	if !projWf.UseVault {
+		reader := bufio.NewReader(os.Stdin)
+
+		// Get all required variables from the workflow content
+		// For project workflow, we need to check all steps and actions
+		var workflowContent string
+		for _, step := range projWf.Steps {
+			workflowContent += step.Command + "\n"
+		}
+		for _, check := range projWf.PreChecks {
+			workflowContent += check.Command + "\n"
+		}
+		for _, action := range projWf.Actions {
+			workflowContent += action.Command + "\n"
+		}
+
+		requiredVars := utils.ExtractTemplateVars(workflowContent)
+
+		for _, v := range requiredVars {
+			if _, exists := resolvedVars[v]; !exists {
+				fmt.Printf("%s: ", v)
+				value, err := reader.ReadString('\n')
+				if err != nil {
+					utils.LogError(fmt.Sprintf("Failed to read input: %v", err))
+					os.Exit(1)
+				}
+				resolvedVars[v] = strings.TrimSpace(value)
+			}
+		}
 	}
 
 	// Execute the project workflow
@@ -451,12 +551,28 @@ func executeProjectYAMLWorkflow(yamlWf *workflow.YAMLWorkflow, variables map[str
 		if err != nil {
 			ui.PrecheckResult(*check.Description, "fail", duration, "")
 			ui.LogErrorBordered(fmt.Sprintf("Pre-check %d failed: %v", i+1, err))
+
+			// Run on_fail hook if present
+			if check.OnFail != "" {
+				if hookErr := executeHook(check.OnFail, yamlWf.Actions, variables, varResolver); hookErr != nil {
+					ui.LogErrorBordered(fmt.Sprintf("Pre-check %d on_fail hook failed: %v", i+1, hookErr))
+				}
+			}
+
 			prechecksFailed++
 			os.Exit(1)
 		} else {
 			ui.PrecheckResult(*check.Description, "ok", duration, "")
 			prechecksPassed++
 			ui.LogInfoBordered("Pre-check completed successfully")
+
+			// Run on_success hook if present
+			if check.OnSuccess != "" {
+				if hookErr := executeHook(check.OnSuccess, yamlWf.Actions, variables, varResolver); hookErr != nil {
+					ui.LogErrorBordered(fmt.Sprintf("Pre-check %d on_success hook failed: %v", i+1, hookErr))
+					os.Exit(1)
+				}
+			}
 		}
 	}
 
@@ -482,9 +598,25 @@ func executeProjectYAMLWorkflow(yamlWf *workflow.YAMLWorkflow, variables map[str
 
 				if err != nil {
 					ui.LogErrorBordered(fmt.Sprintf("Action '%s' failed: %v", actionName, err))
+
+					// Run on_fail hook if present
+					if action.OnFail != "" {
+						if hookErr := executeHook(action.OnFail, yamlWf.Actions, variables, varResolver); hookErr != nil {
+							ui.LogErrorBordered(fmt.Sprintf("Action '%s' on_fail hook failed: %v", actionName, hookErr))
+						}
+					}
+
 					os.Exit(1)
 				}
 				ui.LogInfoBordered("Action completed successfully")
+
+				// Run on_success hook if present
+				if action.OnSuccess != "" {
+					if hookErr := executeHook(action.OnSuccess, yamlWf.Actions, variables, varResolver); hookErr != nil {
+						ui.LogErrorBordered(fmt.Sprintf("Action '%s' on_success hook failed: %v", actionName, hookErr))
+						os.Exit(1)
+					}
+				}
 			} else {
 				ui.LogErrorBordered(fmt.Sprintf("Action '%s' not found in workflow", actionName))
 				os.Exit(1)
@@ -514,9 +646,25 @@ func executeProjectYAMLWorkflow(yamlWf *workflow.YAMLWorkflow, variables map[str
 
 		if err != nil {
 			ui.LogErrorBordered(fmt.Sprintf("Step %d failed: %v", i+1, err))
+
+			// Run on_fail hook if present
+			if step.OnFail != "" {
+				if hookErr := executeHook(step.OnFail, yamlWf.Actions, variables, varResolver); hookErr != nil {
+					ui.LogErrorBordered(fmt.Sprintf("Step %d on_fail hook failed: %v", i+1, hookErr))
+				}
+			}
+
 			os.Exit(1)
 		}
 		ui.LogInfoBordered("Step completed successfully")
+
+		// Run on_success hook if present
+		if step.OnSuccess != "" {
+			if hookErr := executeHook(step.OnSuccess, yamlWf.Actions, variables, varResolver); hookErr != nil {
+				ui.LogErrorBordered(fmt.Sprintf("Step %d on_success hook failed: %v", i+1, hookErr))
+				os.Exit(1)
+			}
+		}
 	}
 
 	// Display summary
@@ -526,85 +674,40 @@ func executeProjectYAMLWorkflow(yamlWf *workflow.YAMLWorkflow, variables map[str
 	ui.LogSuccessBordered(fmt.Sprintf("Project workflow '%s' completed successfully", yamlWf.Name))
 }
 
-func handleWorkflowInfoV2(workflowName string) {
-	// Try to find the workflow in database first
-	storage := sqlite.GetStorageService()
-	dbWf, dbErr := storage.WorkflowStore().GetWorkflow(workflowName)
-
-	// Also try to find in file system
-	fsWf, fsErr := workflow.FindWorkflowByName(workflowName)
-
-	// If neither is found, error out
-	if dbErr != nil && fsErr != nil {
-		utils.LogError(fmt.Sprintf("Workflow '%s' not found in database or current directory", workflowName))
-		os.Exit(1)
+func executeHook(hook string, actions map[string]workflow.YAMLStep, variables map[string]string, varResolver *workflow.VariableResolver) error {
+	if hook == "" {
+		return nil
 	}
 
-	fmt.Printf("\n%s%s%s\n", utils.BOLD, workflowName, utils.RESET)
-
-	if dbErr == nil {
-		// Show database workflow info
-		fmt.Printf("Source: Database\n")
-		fmt.Printf("Use Vault: %t\n", dbWf.UseVault)
-		fmt.Printf("Path: %s\n", dbWf.Path)
-
-		// Parse metadata to show more details
-		// For now, just show the raw metadata
-		fmt.Printf("Metadata: %s\n", dbWf.Metadata)
-		utils.LogInfo("Database workflow details would be shown here")
-	} else {
-		// Show file-based workflow info
-		fmt.Printf("Source: %s\n", fsWf.Path)
-		fmt.Printf("Use Vault: %t\n", fsWf.UseVault)
-
-		if fsWf.Description != nil {
-			fmt.Printf("Description: %s\n", *fsWf.Description)
+	if strings.HasPrefix(hook, "action:") {
+		actionName := strings.TrimPrefix(hook, "action:")
+		action, ok := actions[actionName]
+		if !ok {
+			return fmt.Errorf("action '%s' not found", actionName)
 		}
 
-		// Show pre-checks
-		if len(fsWf.PreChecks) > 0 {
-			fmt.Printf("\nPre-checks:\n")
-			for i, check := range fsWf.PreChecks {
-				fmt.Printf("  %d. %s\n", i+1, *check.Description)
-				fmt.Printf("     Command: %s\n", check.Command)
-			}
+		ui.LogInfoBordered(fmt.Sprintf("Executing hook action: %s", actionName))
+
+		command, err := varResolver.ApplyVariables(action.Command, variables)
+		if err != nil {
+			return fmt.Errorf("failed to apply variables to action %s: %v", actionName, err)
 		}
 
-		// Show steps
-		if len(fsWf.Steps) > 0 {
-			fmt.Printf("\nSteps:\n")
-			for i, step := range fsWf.Steps {
-				fmt.Printf("  %d. %s\n", i+1, *step.Description)
-				fmt.Printf("     Command: %s\n", step.Command)
-			}
+		return execution.ExecuteCommand(command)
+	} else if strings.HasPrefix(hook, "run:") {
+		commandRaw := strings.TrimPrefix(hook, "run:")
+
+		ui.LogInfoBordered(fmt.Sprintf("Executing hook command: %s", commandRaw))
+
+		command, err := varResolver.ApplyVariables(commandRaw, variables)
+		if err != nil {
+			return fmt.Errorf("failed to apply variables to hook command: %v", err)
 		}
 
-		// Show actions
-		if len(fsWf.Actions) > 0 {
-			fmt.Printf("\nActions:\n")
-			for name, action := range fsWf.Actions {
-				fmt.Printf("  %s: %s\n", name, *action.Description)
-				fmt.Printf("     Command: %s\n", action.Command)
-			}
-		}
-
-		// Show variables
-		allContent := ""
-		for _, step := range fsWf.Steps {
-			allContent += step.Command + "\n"
-		}
-		for _, check := range fsWf.PreChecks {
-			allContent += check.Command + "\n"
-		}
-		for name, action := range fsWf.Actions {
-			allContent += fmt.Sprintf("%s: %s\n", name, action.Command)
-		}
-
-		variables := utils.ExtractTemplateVars(allContent)
-		if len(variables) > 0 {
-			fmt.Printf("\nRequired Variables: %s\n", strings.Join(variables, ", "))
-		}
+		return execution.ExecuteCommand(command)
 	}
+
+	return fmt.Errorf("unknown hook format: %s (must start with 'action:' or 'run:')", hook)
 }
 
 func handleRunProjectPreChecks(cmd *cobra.Command) {
@@ -622,23 +725,9 @@ func handleRunProjectPreChecks(cmd *cobra.Command) {
 		os.Exit(1)
 	}
 
-	// Check if the workflow has pre-checks
-	if len(projWf.PreChecks) == 0 {
-		utils.LogInfo("No pre-checks found in the project workflow")
-		return
-	}
-
 	// Get storage service
 	storage := sqlite.GetStorageService()
 
-	// Upsert the workflow to the database
-	if err := workflow.UpsertProjectWorkflowToDB(projWf, storage); err != nil {
-		utils.LogError(fmt.Sprintf("Failed to upsert project workflow to database: %v", err))
-		os.Exit(1)
-	}
-
-	utils.LogInfo(fmt.Sprintf("Project workflow '%s' loaded and upserted to database", projWf.Name))
-
 	// Process variables from flags
 	flagVars, err := cmd.Flags().GetStringArray("var")
 	if err != nil {
@@ -659,180 +748,248 @@ func handleRunProjectPreChecks(cmd *cobra.Command) {
 	// Create variable resolver
 	varResolver := workflow.NewVariableResolver(storage)
 
-	// Resolve variables based on workflow configuration
-	resolvedVars, err := varResolver.ResolveVariables(projWf.Name, projWf.UseVault, variables)
+	// Resolve variables
+	resolvedVars, err := varResolver.ResolveVariables(projWf.Name, projWf.UseVault, variables, projWf.Config.Variables)
 	if err != nil {
 		utils.LogError(fmt.Sprintf("Failed to resolve variables: %v", err))
 		os.Exit(1)
 	}
 
-	// Execute only the pre-checks of the project workflow
-	executeProjectYAMLWorkflowPreChecksOnly(projWf, resolvedVars)
-}
-
-func handleRunWorkflowPreChecksFromStoredDirectory(workflowName string, cmd *cobra.Command) {
-	storage := sqlite.GetStorageService()
-
-	// Get the workflow from the database
-	dbWf, err := storage.WorkflowStore().GetWorkflow(workflowName)
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Workflow '%s' not found in database", workflowName))
-		os.Exit(1)
-	}
-
-	// Get the stored working directory from the vault
-	var workingDir string
-	workingDirEntry, err := storage.VaultStore().GetVariableWithFallback("WORKING_DIR", dbWf.ID)
-	if err == nil && workingDirEntry != nil {
-		workingDir = workingDirEntry.Value
-	} else {
-		// If no stored directory found, use current directory
-		utils.LogInfo(fmt.Sprintf("No stored working directory found for workflow '%s', using current directory", workflowName))
-		workingDir, err = os.Getwd()
-		if err != nil {
-			utils.LogError(fmt.Sprintf("Failed to get current directory: %v", err))
-			os.Exit(1)
+	// If there are still missing variables, prompt for them if not using vault
+	if !projWf.UseVault {
+		reader := bufio.NewReader(os.Stdin)
+		workflowContent := ""
+		for _, check := range projWf.PreChecks {
+			workflowContent += check.Command + "\n"
+		}
+		requiredVars := utils.ExtractTemplateVars(workflowContent)
+		for _, v := range requiredVars {
+			if _, exists := resolvedVars[v]; !exists {
+				fmt.Printf("%s: ", v)
+				value, err := reader.ReadString('\n')
+				if err != nil {
+					utils.LogError(fmt.Sprintf("Failed to read input: %v", err))
+					os.Exit(1)
+				}
+				resolvedVars[v] = strings.TrimSpace(value)
+			}
 		}
 	}
 
-	// Change to the working directory
-	currentDir, err := os.Getwd()
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to get current directory: %v", err))
-		os.Exit(1)
-	}
-
-	if err = os.Chdir(workingDir); err != nil {
-		utils.LogError(fmt.Sprintf("Failed to change to directory '%s': %v", workingDir, err))
-		os.Exit(1)
-	}
-
-	// Log the directory change
-	utils.LogInfo(fmt.Sprintf("Changed to directory: %s", workingDir))
-
-	// Parse the workflow metadata to get the YAML workflow
-	var projectConfig workflow.ProjectConfig
-	metadataBytes, err := json.Marshal(dbWf.Metadata)
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to marshal workflow metadata: %v", err))
-		// Restore original directory before exiting
-		os.Chdir(currentDir)
-		os.Exit(1)
-	}
-
-	if err := json.Unmarshal(metadataBytes, &projectConfig); err != nil {
-		utils.LogError(fmt.Sprintf("Failed to unmarshal workflow metadata: %v", err))
-		// Restore original directory before exiting
-		os.Chdir(currentDir)
-		os.Exit(1)
-	}
-
-	// Convert to YAMLWorkflow format
-	yamlWf := &workflow.YAMLWorkflow{
-		Name:        dbWf.Name,
-		Description: projectConfig.Description,
-		PreChecks:   projectConfig.PreChecks,
-		Steps:       projectConfig.Steps,
-		Actions:     projectConfig.Actions,
-		Config:      projectConfig.Config,
-		UseVault:    dbWf.UseVault,
-		Path:        dbWf.Path,
-	}
-
-	// Check if the workflow has pre-checks
-	if len(yamlWf.PreChecks) == 0 {
-		utils.LogInfo("No pre-checks found in the workflow")
-		// Restore original directory
-		os.Chdir(currentDir)
-		return
-	}
-
-	// Process variables from flags
-	flagVars, err := cmd.Flags().GetStringArray("var")
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to get variables: %v", err))
-		// Restore original directory before exiting
-		os.Chdir(currentDir)
-		os.Exit(1)
-	}
-
-	variables := make(map[string]string)
-	for _, v := range flagVars {
-		parts := strings.SplitN(v, "=", 2)
-		if len(parts) != 2 {
-			utils.LogError(fmt.Sprintf("Invalid variable format: %s. Use KEY=VALUE format", v))
-			// Restore original directory before exiting
-			os.Chdir(currentDir)
-			os.Exit(1)
-		}
-		variables[parts[0]] = parts[1]
-	}
-
-	// Create variable resolver
-	varResolver := workflow.NewVariableResolver(storage)
-
-	// Resolve variables based on workflow configuration
-	resolvedVars, err := varResolver.ResolveVariables(yamlWf.Name, yamlWf.UseVault, variables)
-	if err != nil {
-		utils.LogError(fmt.Sprintf("Failed to resolve variables: %v", err))
-		// Restore original directory before exiting
-		os.Chdir(currentDir)
-		os.Exit(1)
-	}
-
-	// Execute only the pre-checks of the workflow
-	executeProjectYAMLWorkflowPreChecksOnly(yamlWf, resolvedVars)
-
-	// Restore original directory
-	os.Chdir(currentDir)
-	utils.LogInfo(fmt.Sprintf("Restored to original directory: %s", currentDir))
-}
-
-func executeProjectYAMLWorkflowPreChecksOnly(yamlWf *workflow.YAMLWorkflow, variables map[string]string) {
-	// Display workflow header
-	ui.WorkflowHeader(yamlWf.Name, "pre-checks")
-	startTime := time.Now()
-
-	// Create variable resolver for applying variables
-	varResolver := workflow.NewVariableResolver(sqlite.GetStorageService())
-
-	// Track precheck statistics
-	precheckCount := 0
+	// Run pre-checks
+	ui.WorkflowHeader(projWf.Name, "pre-check")
+	
 	prechecksPassed := 0
 	prechecksFailed := 0
-	prechecksWarn := 0
-
-	// Run pre-checks section
+	
 	ui.SectionHeader("PRECHECKS")
 
-	for i, check := range yamlWf.PreChecks {
+	for i, check := range projWf.PreChecks {
 		precheckStartTime := time.Now()
-		command, err := varResolver.ApplyVariables(check.Command, variables)
+		command, err := varResolver.ApplyVariables(check.Command, resolvedVars)
 		if err != nil {
 			ui.LogErrorBordered(fmt.Sprintf("Failed to apply variables to pre-check %d: %v", i+1, err))
 			os.Exit(1)
 		}
 
-		// Execute the command using the execution package
-		precheckCount++
 		err = execution.ExecuteCommand(command)
 		duration := time.Since(precheckStartTime)
 
 		if err != nil {
 			ui.PrecheckResult(*check.Description, "fail", duration, "")
 			ui.LogErrorBordered(fmt.Sprintf("Pre-check %d failed: %v", i+1, err))
+			
+			if check.OnFail != "" {
+				if hookErr := executeHook(check.OnFail, projWf.Actions, resolvedVars, varResolver); hookErr != nil {
+					ui.LogErrorBordered(fmt.Sprintf("Pre-check %d on_fail hook failed: %v", i+1, hookErr))
+				}
+			}
+			
 			prechecksFailed++
 			os.Exit(1)
 		} else {
 			ui.PrecheckResult(*check.Description, "ok", duration, "")
 			prechecksPassed++
-			ui.LogInfoBordered("Pre-check completed successfully")
+			
+			if check.OnSuccess != "" {
+				if hookErr := executeHook(check.OnSuccess, projWf.Actions, resolvedVars, varResolver); hookErr != nil {
+					ui.LogErrorBordered(fmt.Sprintf("Pre-check %d on_success hook failed: %v", i+1, hookErr))
+					os.Exit(1)
+				}
+			}
 		}
 	}
 
-	// Display summary
-	totalDuration := time.Since(startTime)
-	ui.Summary("SUCCESS", totalDuration, prechecksPassed, prechecksFailed, prechecksWarn, 0, 0, "", "")
+	ui.LogSuccessBordered("All pre-checks passed successfully")
+}
 
-	ui.LogSuccessBordered(fmt.Sprintf("Project workflow pre-checks for '%s' completed successfully", yamlWf.Name))
+func handleRunWorkflowPreChecksFromStoredDirectory(workflowName string, cmd *cobra.Command) {
+	// First, try to find the workflow in the database
+	storage := sqlite.GetStorageService()
+	dbWf, dbErr := storage.WorkflowStore().GetWorkflow(workflowName)
+
+	// Also try to find the workflow in current directory
+	fsWf, fsErr := workflow.FindWorkflowByName(workflowName)
+
+	if dbErr != nil && fsErr != nil {
+		utils.LogError(fmt.Sprintf("Workflow '%s' not found in database or current directory", workflowName))
+		os.Exit(1)
+	}
+
+	// Prefer database workflow
+	var useVault bool
+	var configVariables map[string]interface{}
+	var workflowID string
+	var preChecks []workflow.YAMLStep
+	var actions map[string]workflow.YAMLStep
+
+	if dbErr == nil {
+		useVault = dbWf.UseVault
+		workflowID = dbWf.ID
+		
+		metadataBytes, _ := json.Marshal(dbWf.Metadata)
+		var config workflow.ProjectConfig
+		if err := json.Unmarshal(metadataBytes, &config); err == nil {
+			configVariables = config.Config.Variables
+			preChecks = config.PreChecks
+			actions = config.Actions
+		}
+	} else {
+		useVault = fsWf.UseVault
+		workflowID = workflowName
+		configVariables = fsWf.Config.Variables
+		preChecks = fsWf.PreChecks
+		actions = fsWf.Actions
+	}
+
+	// Process variables from flags
+	flagVars, err := cmd.Flags().GetStringArray("var")
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to get variables: %v", err))
+		os.Exit(1)
+	}
+
+	variables := make(map[string]string)
+	for _, v := range flagVars {
+		parts := strings.SplitN(v, "=", 2)
+		if len(parts) != 2 {
+			utils.LogError(fmt.Sprintf("Invalid variable format: %s. Use KEY=VALUE format", v))
+			os.Exit(1)
+		}
+		variables[parts[0]] = parts[1]
+	}
+
+	// Create variable resolver
+	varResolver := workflow.NewVariableResolver(storage)
+
+	// Resolve variables
+	resolvedVars, err := varResolver.ResolveVariables(workflowID, useVault, variables, configVariables)
+	if err != nil {
+		utils.LogError(fmt.Sprintf("Failed to resolve variables: %v", err))
+		os.Exit(1)
+	}
+
+	// If missing variables, prompt
+	if !useVault {
+		reader := bufio.NewReader(os.Stdin)
+		workflowContent := ""
+		for _, check := range preChecks {
+			workflowContent += check.Command + "\n"
+		}
+		requiredVars := utils.ExtractTemplateVars(workflowContent)
+		for _, v := range requiredVars {
+			if _, exists := resolvedVars[v]; !exists {
+				fmt.Printf("%s: ", v)
+				value, err := reader.ReadString('\n')
+				if err != nil {
+					utils.LogError(fmt.Sprintf("Failed to read input: %v", err))
+					os.Exit(1)
+				}
+				resolvedVars[v] = strings.TrimSpace(value)
+			}
+		}
+	}
+
+	// Run pre-checks
+	ui.WorkflowHeader(workflowName, "pre-check")
+	
+	ui.SectionHeader("PRECHECKS")
+
+	for i, check := range preChecks {
+		precheckStartTime := time.Now()
+		command, err := varResolver.ApplyVariables(check.Command, resolvedVars)
+		if err != nil {
+			ui.LogErrorBordered(fmt.Sprintf("Failed to apply variables to pre-check %d: %v", i+1, err))
+			os.Exit(1)
+		}
+
+		err = execution.ExecuteCommand(command)
+		duration := time.Since(precheckStartTime)
+
+		if err != nil {
+			ui.PrecheckResult(*check.Description, "fail", duration, "")
+			ui.LogErrorBordered(fmt.Sprintf("Pre-check %d failed: %v", i+1, err))
+			
+			if check.OnFail != "" {
+				if hookErr := executeHook(check.OnFail, actions, resolvedVars, varResolver); hookErr != nil {
+					ui.LogErrorBordered(fmt.Sprintf("Pre-check %d on_fail hook failed: %v", i+1, hookErr))
+				}
+			}
+			
+			os.Exit(1)
+		} else {
+			ui.PrecheckResult(*check.Description, "ok", duration, "")
+			
+			if check.OnSuccess != "" {
+				if hookErr := executeHook(check.OnSuccess, actions, resolvedVars, varResolver); hookErr != nil {
+					ui.LogErrorBordered(fmt.Sprintf("Pre-check %d on_success hook failed: %v", i+1, hookErr))
+					os.Exit(1)
+				}
+			}
+		}
+	}
+
+	ui.LogSuccessBordered("All pre-checks passed successfully")
+}
+
+func handleWorkflowInfoV2(workflowName string) {
+	// First, try to find the workflow in the database
+	storage := sqlite.GetStorageService()
+	dbWf, dbErr := storage.WorkflowStore().GetWorkflow(workflowName)
+	
+	// Also try to find the workflow in current directory
+	fsWf, fsErr := workflow.FindWorkflowByName(workflowName)
+	
+	if dbErr != nil && fsErr != nil {
+		utils.LogError(fmt.Sprintf("Workflow '%s' not found", workflowName))
+		os.Exit(1)
+	}
+	
+	ui.SectionHeader(fmt.Sprintf("WORKFLOW INFO: %s", workflowName))
+	
+	if dbErr == nil {
+		fmt.Printf("Source: Database\n")
+		fmt.Printf("ID: %s\n", dbWf.ID)
+		fmt.Printf("Vault Enabled: %v\n", dbWf.UseVault)
+		
+		metadataBytes, _ := json.Marshal(dbWf.Metadata)
+		var config workflow.ProjectConfig
+		if err := json.Unmarshal(metadataBytes, &config); err == nil {
+			fmt.Printf("Pre-checks: %d\n", len(config.PreChecks))
+			fmt.Printf("Steps: %d\n", len(config.Steps))
+			fmt.Printf("Actions: %d\n", len(config.Actions))
+		}
+	} else {
+		fmt.Printf("Source: Local File\n")
+		if fsWf.Path != "" {
+			fmt.Printf("Path: %s\n", fsWf.Path)
+		}
+		if fsWf.Description != nil {
+			fmt.Printf("Description: %s\n", *fsWf.Description)
+		}
+		fmt.Printf("Vault Enabled: %v\n", fsWf.UseVault)
+		fmt.Printf("Pre-checks: %d\n", len(fsWf.PreChecks))
+		fmt.Printf("Steps: %d\n", len(fsWf.Steps))
+		fmt.Printf("Actions: %d\n", len(fsWf.Actions))
+	}
 }

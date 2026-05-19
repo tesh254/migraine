@@ -52,6 +52,8 @@ func ConvertYAMLToInternal(yamlWf *YAMLWorkflow) (*Workflow, error) {
 		preChecks[i] = Atom{
 			Command:     step.Command,
 			Description: step.Description,
+			OnFail:      step.OnFail,
+			OnSuccess:   step.OnSuccess,
 		}
 	}
 
@@ -60,6 +62,8 @@ func ConvertYAMLToInternal(yamlWf *YAMLWorkflow) (*Workflow, error) {
 		steps[i] = Atom{
 			Command:     step.Command,
 			Description: step.Description,
+			OnFail:      step.OnFail,
+			OnSuccess:   step.OnSuccess,
 		}
 	}
 
@@ -68,6 +72,8 @@ func ConvertYAMLToInternal(yamlWf *YAMLWorkflow) (*Workflow, error) {
 		actions[name] = Atom{
 			Command:     action.Command,
 			Description: action.Description,
+			OnFail:      action.OnFail,
+			OnSuccess:   action.OnSuccess,
 		}
 	}
 
@@ -75,6 +81,9 @@ func ConvertYAMLToInternal(yamlWf *YAMLWorkflow) (*Workflow, error) {
 	config := Config{
 		Variables:      yamlWf.Config.Variables,
 		StoreVariables: yamlWf.Config.StoreVariables,
+		StoreLogs:      yamlWf.Config.StoreLogs,
+		Background:     yamlWf.Config.Background,
+		Global:         yamlWf.Config.Global,
 	}
 
 	return &Workflow{
@@ -95,6 +104,8 @@ func ConvertInternalToYAML(internalWf *Workflow, id string) *YAMLWorkflow {
 		preChecks[i] = YAMLStep{
 			Command:     step.Command,
 			Description: step.Description,
+			OnFail:      step.OnFail,
+			OnSuccess:   step.OnSuccess,
 		}
 	}
 
@@ -103,6 +114,8 @@ func ConvertInternalToYAML(internalWf *Workflow, id string) *YAMLWorkflow {
 		steps[i] = YAMLStep{
 			Command:     step.Command,
 			Description: step.Description,
+			OnFail:      step.OnFail,
+			OnSuccess:   step.OnSuccess,
 		}
 	}
 
@@ -111,6 +124,8 @@ func ConvertInternalToYAML(internalWf *Workflow, id string) *YAMLWorkflow {
 		actions[name] = YAMLStep{
 			Command:     action.Command,
 			Description: action.Description,
+			OnFail:      action.OnFail,
+			OnSuccess:   action.OnSuccess,
 		}
 	}
 
@@ -118,6 +133,9 @@ func ConvertInternalToYAML(internalWf *Workflow, id string) *YAMLWorkflow {
 	config := YAMLConfig{
 		Variables:      internalWf.Config.Variables,
 		StoreVariables: internalWf.Config.StoreVariables,
+		StoreLogs:      internalWf.Config.StoreLogs,
+		Background:     internalWf.Config.Background,
+		Global:         internalWf.Config.Global,
 	}
 
 	return &YAMLWorkflow{
@@ -127,5 +145,6 @@ func ConvertInternalToYAML(internalWf *Workflow, id string) *YAMLWorkflow {
 		Steps:       steps,
 		Actions:     actions,
 		Config:      config,
+		// UseVault is not directly in Config, assuming false or passed separately
 	}
 }
