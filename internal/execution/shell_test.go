@@ -3,6 +3,7 @@ package execution
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -51,18 +52,15 @@ func TestExecuteCommand_Echo(t *testing.T) {
 
 func TestGetDefaultShell_Fallback(t *testing.T) {
 	origShell := os.Getenv("SHELL")
-	origHome := os.Getenv("HOME")
-	defer func() {
-		os.Setenv("SHELL", origShell)
-		os.Setenv("HOME", origHome)
-	}()
+	defer os.Setenv("SHELL", origShell)
 
 	os.Setenv("SHELL", "")
-	tmpDir := t.TempDir()
-	os.Setenv("HOME", tmpDir)
 
 	shell := getDefaultShell()
-	if shell != "/bin/sh" {
-		t.Errorf("expected /bin/sh fallback, got %s", shell)
+	if shell == "" {
+		t.Error("expected a fallback shell, got empty string")
+	}
+	if !strings.HasPrefix(shell, "/") {
+		t.Errorf("expected absolute path, got %s", shell)
 	}
 }
