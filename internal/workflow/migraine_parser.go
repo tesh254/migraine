@@ -13,6 +13,20 @@ type MigraineParser struct {
 	peekToken Token
 }
 
+func LoadMigraineWorkflow(path string) (*YAMLWorkflow, error) {
+	p, err := NewMigraineParser(path)
+	if err != nil {
+		return nil, err
+	}
+	wf, err := p.Parse()
+	if err != nil {
+		return nil, err
+	}
+	yamlWf := ConvertInternalToYAML(wf, "")
+	yamlWf.Path = path
+	return yamlWf, nil
+}
+
 func NewMigraineParser(path string) (*MigraineParser, error) {
 	file, err := os.Open(path)
 	if err != nil {

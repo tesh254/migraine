@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,6 +14,26 @@ import (
 	"github.com/tesh254/migraine/internal/workflow"
 	"github.com/tesh254/migraine/pkg/utils"
 )
+
+func readLine() string {
+	var buf [1]byte
+	var line []byte
+	for {
+		n, err := os.Stdin.Read(buf[:])
+		if n > 0 {
+			if buf[0] == '\n' {
+				break
+			}
+			if buf[0] != '\r' {
+				line = append(line, buf[0])
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+	return string(line)
+}
 
 func handleListWorkflows() {
 	// List workflows from database
@@ -166,20 +185,12 @@ func handleRunWorkflowV2(workflowName string, cmd *cobra.Command) {
 
 	// If there are still missing variables, prompt for them if not using vault
 	if !useVault {
-		reader := bufio.NewReader(os.Stdin)
-
-		// Get all required variables from the workflow content
 		requiredVars := utils.ExtractTemplateVars(workflowContent)
 
 		for _, v := range requiredVars {
 			if _, exists := resolvedVars[v]; !exists {
 				fmt.Printf("%s: ", v)
-				value, err := reader.ReadString('\n')
-				if err != nil {
-					utils.LogError(fmt.Sprintf("Failed to read input: %v", err))
-					os.Exit(1)
-				}
-				resolvedVars[v] = strings.TrimSpace(value)
+				resolvedVars[v] = readLine()
 			}
 		}
 	}
@@ -477,10 +488,6 @@ func handleRunProjectWorkflow(cmd *cobra.Command) {
 
 	// If there are still missing variables, prompt for them if not using vault
 	if !projWf.UseVault {
-		reader := bufio.NewReader(os.Stdin)
-
-		// Get all required variables from the workflow content
-		// For project workflow, we need to check all steps and actions
 		var workflowContent string
 		for _, step := range projWf.Steps {
 			workflowContent += step.Command + "\n"
@@ -497,12 +504,7 @@ func handleRunProjectWorkflow(cmd *cobra.Command) {
 		for _, v := range requiredVars {
 			if _, exists := resolvedVars[v]; !exists {
 				fmt.Printf("%s: ", v)
-				value, err := reader.ReadString('\n')
-				if err != nil {
-					utils.LogError(fmt.Sprintf("Failed to read input: %v", err))
-					os.Exit(1)
-				}
-				resolvedVars[v] = strings.TrimSpace(value)
+				resolvedVars[v] = readLine()
 			}
 		}
 	}
@@ -757,7 +759,6 @@ func handleRunProjectPreChecks(cmd *cobra.Command) {
 
 	// If there are still missing variables, prompt for them if not using vault
 	if !projWf.UseVault {
-		reader := bufio.NewReader(os.Stdin)
 		workflowContent := ""
 		for _, check := range projWf.PreChecks {
 			workflowContent += check.Command + "\n"
@@ -766,12 +767,7 @@ func handleRunProjectPreChecks(cmd *cobra.Command) {
 		for _, v := range requiredVars {
 			if _, exists := resolvedVars[v]; !exists {
 				fmt.Printf("%s: ", v)
-				value, err := reader.ReadString('\n')
-				if err != nil {
-					utils.LogError(fmt.Sprintf("Failed to read input: %v", err))
-					os.Exit(1)
-				}
-				resolvedVars[v] = strings.TrimSpace(value)
+				resolvedVars[v] = readLine()
 			}
 		}
 	}
@@ -891,7 +887,6 @@ func handleRunWorkflowPreChecksFromStoredDirectory(workflowName string, cmd *cob
 
 	// If missing variables, prompt
 	if !useVault {
-		reader := bufio.NewReader(os.Stdin)
 		workflowContent := ""
 		for _, check := range preChecks {
 			workflowContent += check.Command + "\n"
@@ -900,12 +895,7 @@ func handleRunWorkflowPreChecksFromStoredDirectory(workflowName string, cmd *cob
 		for _, v := range requiredVars {
 			if _, exists := resolvedVars[v]; !exists {
 				fmt.Printf("%s: ", v)
-				value, err := reader.ReadString('\n')
-				if err != nil {
-					utils.LogError(fmt.Sprintf("Failed to read input: %v", err))
-					os.Exit(1)
-				}
-				resolvedVars[v] = strings.TrimSpace(value)
+				resolvedVars[v] = readLine()
 			}
 		}
 	}
