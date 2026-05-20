@@ -3,14 +3,10 @@ package execution
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"os/user"
-	"path/filepath"
 	"strings"
-
-	"github.com/creack/pty"
 )
 
 func getDefaultShell() string {
@@ -39,43 +35,15 @@ func getDefaultShell() string {
 
 func ExecuteCommand(command string) error {
 	shell := getDefaultShell()
-	shellName := filepath.Base(shell)
 
-	var cmd *exec.Cmd
-	switch shellName {
-	case "bash":
-		cmd = exec.Command(shell, "--login", "-c", command)
-	case "zsh":
-		cmd = exec.Command(shell, "-l", "-c", command)
-	case "fish":
-		cmd = exec.Command(shell, "-l", "-c", command)
-	default:
-		cmd = exec.Command(shell, "-c", command)
-	}
-
+	cmd := exec.Command(shell, "-c", command)
 	cmd.Env = os.Environ()
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
-	ptmx, err := pty.Start(cmd)
-	if err != nil {
-		return fmt.Errorf("failed to start command: %v", err)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("command failed: %w", err)
 	}
-	defer ptmx.Close()
-
-	const (
-		colorGray  = "\033[90m"
-		fontSmall  = "\033[2m"
-		resetCodes = "\033[0m"
-	)
-
-	fmt.Fprint(os.Stdout, colorGray+fontSmall)
-
-	_, err = io.Copy(os.Stdout, ptmx)
-
-	fmt.Fprint(os.Stdout, resetCodes)
-
-	if err != nil {
-		return err
-	}
-
-	return cmd.Wait()
+	return nil
 }

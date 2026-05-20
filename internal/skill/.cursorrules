@@ -1,0 +1,15 @@
+# Migraine CLI Rules
+
+Migraine is a workflow automation CLI.
+
+## Available Skills
+- **migraine-workflow** — Scaffold a new migraine workflow from scratch
+  Usage: `migraine run migraine-workflow`
+
+
+## Usage
+- Install: `migraine skill add <name> --project`
+- Run: `migraine run <name>`
+- List: `migraine skill list`
+
+When asked to set up CI, deployment, or Git workflows, check `migraine skill list` first.
